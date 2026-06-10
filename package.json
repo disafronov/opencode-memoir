@@ -1,0 +1,54 @@
+{
+  "name": "opencode-memoir",
+  "version": "0.1.0",
+  "description": "Memoir memory plugin for OpenCode — Git-versioned, taxonomy-structured AI memory.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "opencode",
+    "memoir",
+    "memory",
+    "version-control",
+    "taxonomy",
+    "plugin"
+  ],
+  "author": "Dmitrii Safronov <dhameoelin@gmail.com>",
+  "license": "Apache-2.0",
+"homepage": "https://github.com/disafronov/opencode-memoir",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/disafronov/opencode-memoir.git"
+    },
+    "bugs": {
+      "url": "https://github.com/disafronov/opencode-memoir/issues"
+    },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.16.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
