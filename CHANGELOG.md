@@ -1,3 +1,9 @@
+## [1.0.4](https://github.com/disafronov/opencode-memoir/compare/v1.0.3...v1.0.4) (2026-06-11)
+
+### Bug Fixes
+
+* update exports field for CJS compatibility in plugin loading ([bd6741b](https://github.com/disafronov/opencode-memoir/commit/bd6741bed4e32864042142b88963d2f339e37008))
+
 ## [1.0.3](https://github.com/disafronov/opencode-memoir/compare/v1.0.2...v1.0.3) (2026-06-11)
 
 ### Bug Fixes
