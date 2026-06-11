@@ -6,25 +6,7 @@ The OpenCode counterpart to the Claude Code and Codex Memoir plugins. Derives a 
 
 ## Install
 
-Add to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
-
-```jsonc
-{
-  "plugin": [
-    "npm:opencode-memoir"
-  ]
-}
-```
-
-OpenCode resolves the package via npm automatically; no manual download needed.
-
-### Alternative: global install
-
-```bash
-npm install -g opencode-memoir
-```
-
-Then reference it by path in your config:
+Add the package name to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
 
 ```jsonc
 {
@@ -34,7 +16,9 @@ Then reference it by path in your config:
 }
 ```
 
-The plugin auto-resolves the `memoir` CLI: first from `PATH`, then via `uvx --from memoir-ai==<pin> memoir` (no separate install needed).
+OpenCode downloads and resolves the package from npm automatically; no manual install or `npm:` prefix needed. To pin a version, append it: `"opencode-memoir@1.0.0"`.
+
+The `memoir` CLI is resolved automatically with no separate install — see [Memoir CLI resolution](#memoir-cli-resolution).
 
 ## Quick start
 
@@ -57,7 +41,7 @@ Example when loading through `plugin[]`:
 ```jsonc
 {
   "plugin": [
-    ["npm:opencode-memoir", { "store": "/custom/store/path" }]
+    ["opencode-memoir", { "store": "/custom/store/path" }]
   ]
 }
 ```
@@ -134,7 +118,7 @@ Every command passes an explicit `-s <store>` to keep the project git and Memoir
 ```bash
 npm install
 npm run build    # typecheck + emit dist
-npm test         # run the test suite (69 tests)
+npm test         # run the test suite
 ```
 
 ### Source layout
@@ -149,26 +133,19 @@ npm test         # run the test suite (69 tests)
 
 ### Tests
 
-```bash
-npm test
-```
-
-69 tests across 5 files. Run with `tsx --test` (handles `.js` → `.ts` resolution under NodeNext).
+The suite runs with `tsx --test` (handles `.js` → `.ts` resolution under NodeNext).
 
 To debug hooks locally, run OpenCode with `MEMOIR_DEBUG=1` and watch stderr for `[memoir]` lines.
 
 ## Publishing
 
-```bash
-# Log in to npm (one-time)
-npm login
+Releases are fully automated — no manual `npm version` or `npm publish`.
 
-# Bump version, build, test, publish
-npm version patch   # minor | major
-npm publish
-```
+1. Land changes on `main` via PR using [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, etc.). The commit type determines the version bump.
+2. On push to `main`, `.github/workflows/semantic.yaml` runs [semantic-release](https://semantic-release.gitbook.io/): it computes the next version, updates the changelog, commits `chore(release): x.y.z`, and pushes a matching `vx.y.z` git tag.
+3. The new tag triggers `.github/workflows/publish-npm.yaml`, which builds and runs `npm publish --provenance` to npm via [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC — no tokens stored).
 
-The `prepublishOnly` script runs `build` + `test` automatically. Published files are limited to `dist/` and `README.md` (see `files` in `package.json`).
+Published files are limited to `dist/` and `README.md` (see `files` in `package.json`); the `prepublishOnly` script runs `build` + `test` as a safety net.
 
 ## License
 

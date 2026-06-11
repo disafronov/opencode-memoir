@@ -35,7 +35,7 @@
   "homepage": "https://github.com/disafronov/opencode-memoir",
   "repository": {
     "type": "git",
-    "url": "https://github.com/disafronov/opencode-memoir.git"
+    "url": "git+https://github.com/disafronov/opencode-memoir.git"
   },
   "bugs": {
     "url": "https://github.com/disafronov/opencode-memoir/issues"
