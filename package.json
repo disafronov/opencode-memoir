@@ -19,8 +19,7 @@
     "build": "tsc -p tsconfig.json --declaration --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:node:* --external:@opencode-ai/plugin --sourcemap",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "prepack": "npm run build",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test && node -e \"import('./dist/index.js').then(m=>{if(typeof m.default!=='function'){console.error('Smoke FAILED: default export not a function');process.exit(1)}else{console.log('Smoke OK: default=',typeof m.default)}})\""
   },
   "keywords": [
     "opencode",
