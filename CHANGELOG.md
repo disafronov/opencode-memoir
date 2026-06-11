@@ -1,3 +1,9 @@
+## [1.0.7](https://github.com/disafronov/opencode-memoir/compare/v1.0.6...v1.0.7) (2026-06-11)
+
+### Bug Fixes
+
+* prepublishOnly smoke check + remove double build in CI ([483cb1e](https://github.com/disafronov/opencode-memoir/commit/483cb1ebc131c0d7e1506e25bf6ad677c4726d8c))
+
 ## [1.0.6](https://github.com/disafronov/opencode-memoir/compare/v1.0.5...v1.0.6) (2026-06-11)
 
 ### Bug Fixes
