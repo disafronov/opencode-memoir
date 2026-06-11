@@ -312,7 +312,7 @@ const memoirGet = tool({
   },
 });
 
-export const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
+const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
   const opts = (rawOptions ?? {}) as { store?: string };
   if (opts.store) setPluginStoreOverride(opts.store);
 
@@ -523,4 +523,4 @@ export const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
 });
 };
 
-// Named export MemoirOpenCode (defined above)
+export default MemoirOpenCode;

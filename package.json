@@ -1,6 +1,6 @@
 {
   "name": "opencode-memoir",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Memoir memory plugin for OpenCode — Git-versioned, taxonomy-structured AI memory.",
   "type": "module",
   "main": "dist/index.js",
@@ -16,7 +16,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json --declaration --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:node:* --external:@opencode-ai/plugin --sourcemap",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "prepack": "npm run build",
@@ -45,10 +45,14 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
     "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   },
   "engines": {
     "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.0": true
   }
 }

@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MemoirOpenCode } from '../src/index.ts';
+import MemoirOpenCode from '../src/index.ts';
 import {
   clearSession, EDIT_TOOLS, getPendingEdits, getToolMetrics, recordEdit, recordToolMetrics,
 } from '../src/capture.ts';
