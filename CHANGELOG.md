@@ -1,3 +1,9 @@
+## [1.0.5](https://github.com/disafronov/opencode-memoir/compare/v1.0.4...v1.0.5) (2026-06-11)
+
+### Bug Fixes
+
+* change plugin export to named export for OpenCode 1.17+ compatibility ([a6e2f12](https://github.com/disafronov/opencode-memoir/commit/a6e2f1226bb98f098de58d648a8355bff28d8547))
+
 ## [1.0.4](https://github.com/disafronov/opencode-memoir/compare/v1.0.3...v1.0.4) (2026-06-11)
 
 ### Bug Fixes
