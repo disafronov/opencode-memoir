@@ -1,3 +1,9 @@
+## [1.0.6](https://github.com/disafronov/opencode-memoir/compare/v1.0.5...v1.0.6) (2026-06-11)
+
+### Bug Fixes
+
+* bundle plugin into single file with esbuild for OpenCode compatibility ([9ede303](https://github.com/disafronov/opencode-memoir/commit/9ede303c604be4010c7756966a7d6aafc57e1d42))
+
 ## [1.0.5](https://github.com/disafronov/opencode-memoir/compare/v1.0.4...v1.0.5) (2026-06-11)
 
 ### Bug Fixes
