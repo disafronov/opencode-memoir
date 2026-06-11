@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24  # npm 11+ required for OIDC
           registry-url: "https://registry.npmjs.org"
 
       - name: Verify version matches tag
@@ -41,6 +41,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
 
       - name: Publish to npm
         run: npm publish --provenance --access public
