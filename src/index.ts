@@ -3,10 +3,11 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { type Config, type Plugin, tool } from '@opencode-ai/plugin';
+import { type Config, type Plugin, type PluginModule, tool } from '@opencode-ai/plugin';
 import { autoMatchMemoirBranch, codeGitBranch, deriveStorePath, ensureStore, memoirResolved, memoirSpawnSpecs, runMemoir, setPluginStoreOverride } from './store.js';
 import { EDIT_TOOLS, flushCapture, getCachedBranch, recordEdit, recordToolMetrics, setCachedBranch } from './capture.js';
 import { DEFAULT_RECALL_NAMESPACES, isSecretSanitizationEnabled, pendingRecall, SECRET_PATTERN, shouldTriggerRecall } from './recall-gate.js';
+import { coercePaths, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from './utils.js';
 import { debugLog } from './debug.js';
 
 type CommandOutput = {
@@ -125,23 +126,9 @@ async function launchUi(store: string): Promise<string> {
   return `Memoir UI failed to start: ${lastError || 'no launcher succeeded'}`;
 }
 
-export function coercePaths(path: string | string[] | undefined): string[] {
-  if (!path) return [];
-  return Array.isArray(path) ? path.filter(Boolean) : [path];
-}
-
 function pushText(output: CommandOutput, text: string): void {
   output.parts.length = 0;
   output.parts.push({ type: 'text', text });
-}
-
-/** Format JSON string with 2-space indentation. Passes non-JSON through unchanged. */
-export function tryPrettyJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
 }
 
 /** Cached session init context (taxonomy overview). Fetched once, injected per-session. */
@@ -284,9 +271,6 @@ const memoirRecall = tool({
     return `${query}${note}\nPick at most 5-7 relevant exact keys across namespaces, then call memoir_get with the matching namespace if values are needed.\n${sections.join('\n\n')}`;
   },
 });
-
-/** Max keys memoir_get accepts to avoid hitting OS arg-length limits. */
-export const MEMOIR_GET_MAX_KEYS = 20;
 
 const memoirGet = tool({
   description: 'Fetch exact Memoir memory keys after selecting them from memoir_recall output.',
@@ -523,4 +507,15 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
 });
 };
 
-export default MemoirOpenCode;
+/**
+ * V1 plugin module format: OpenCode's loader recognizes `{ id, server }` and
+ * ignores any other module exports. The legacy format (default-exported
+ * function) made the loader treat EVERY export as a plugin and fail on
+ * non-function exports ("Plugin export is not a function").
+ */
+const plugin: PluginModule = {
+  id: 'opencode-memoir',
+  server: MemoirOpenCode,
+};
+
+export default plugin;

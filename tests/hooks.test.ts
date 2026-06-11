@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-import MemoirOpenCode from '../src/index.ts';
+import MemoirPlugin from '../src/index.ts';
 import {
   clearSession, EDIT_TOOLS, getPendingEdits, getToolMetrics, recordEdit, recordToolMetrics,
 } from '../src/capture.ts';
@@ -32,7 +32,7 @@ type HookMap = Record<string, (...args: unknown[]) => unknown>;
 let hooks: HookMap;
 
 before(async () => {
-  hooks = (await MemoirOpenCode(mockPluginInput() as never, {})) as unknown as HookMap;
+  hooks = (await MemoirPlugin.server(mockPluginInput() as never, {})) as unknown as HookMap;
 });
 
 // All tool.execute.after and chat.message tests use this session ID.

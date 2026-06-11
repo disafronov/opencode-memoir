@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { coercePaths, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from '../src/index.ts';
+import { coercePaths, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from '../src/utils.ts';
 import { SECRET_PATTERN, isSecretSanitizationEnabled } from '../src/recall-gate.ts';
 import { parseTurnMetrics, serializeTurnMetrics } from '../src/capture.ts';
 

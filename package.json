@@ -19,7 +19,7 @@
     "build": "tsc -p tsconfig.json --declaration --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:node:* --external:@opencode-ai/plugin --sourcemap",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "prepublishOnly": "npm run build && npm test && node -e \"import('./dist/index.js').then(m=>{if(typeof m.default!=='function'){console.error('Smoke FAILED: default export not a function');process.exit(1)}else{console.log('Smoke OK: default=',typeof m.default)}})\""
+    "prepublishOnly": "npm run build && npm test && node -e \"import('./dist/index.js').then(m=>{const d=m.default;if(!d||typeof d!=='object'||typeof d.server!=='function'||d.id!=='opencode-memoir'){console.error('Smoke FAILED: default export is not a V1 plugin module ({ id, server })');process.exit(1)}else{console.log('Smoke OK: id=',d.id,'server=',typeof d.server)}})\""
   },
   "keywords": [
     "opencode",
