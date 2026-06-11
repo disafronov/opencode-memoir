@@ -1,3 +1,9 @@
+## [1.0.3](https://github.com/disafronov/opencode-memoir/compare/v1.0.2...v1.0.3) (2026-06-11)
+
+### Bug Fixes
+
+* move npm upgrade before npm ci in publish workflow ([265373c](https://github.com/disafronov/opencode-memoir/commit/265373cafcefeb0844534c0e6708eeebbbec49f5))
+
 ## [1.0.2](https://github.com/disafronov/opencode-memoir/compare/v1.0.1...v1.0.2) (2026-06-11)
 
 ### Bug Fixes
