@@ -1,6 +1,6 @@
 {
   "name": "opencode-memoir",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Memoir memory plugin for OpenCode — Git-versioned, taxonomy-structured AI memory.",
   "type": "module",
   "main": "dist/index.js",
@@ -32,14 +32,14 @@
   ],
   "author": "Dmitrii Safronov <dhameoelin@gmail.com>",
   "license": "Apache-2.0",
-"homepage": "https://github.com/disafronov/opencode-memoir",
-    "repository": {
-      "type": "git",
-      "url": "https://github.com/disafronov/opencode-memoir.git"
-    },
-    "bugs": {
-      "url": "https://github.com/disafronov/opencode-memoir/issues"
-    },
+  "homepage": "https://github.com/disafronov/opencode-memoir",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/disafronov/opencode-memoir.git"
+  },
+  "bugs": {
+    "url": "https://github.com/disafronov/opencode-memoir/issues"
+  },
   "dependencies": {
     "@opencode-ai/plugin": "^1.16.2"
   },
