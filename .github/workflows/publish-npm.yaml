@@ -23,6 +23,9 @@ jobs:
           node-version: 24  # npm 11+ required for OIDC
           registry-url: "https://registry.npmjs.org"
 
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
+
       - name: Verify version matches tag
         run: |
           TAG_NAME="${GITHUB_REF_NAME#v}"
@@ -41,9 +44,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
 
       - name: Publish to npm
         run: npm publish --provenance --access public
