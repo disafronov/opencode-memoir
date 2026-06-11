@@ -1,3 +1,9 @@
+## [1.0.2](https://github.com/disafronov/opencode-memoir/compare/v1.0.1...v1.0.2) (2026-06-11)
+
+### Bug Fixes
+
+* upgrade npm to latest for OIDC support in publish workflow ([0ac7604](https://github.com/disafronov/opencode-memoir/commit/0ac7604202eada3114dce47f97ed829a6b06f9e3))
+
 ## [1.0.1](https://github.com/disafronov/opencode-memoir/compare/v1.0.0...v1.0.1) (2026-06-11)
 
 ### Bug Fixes
