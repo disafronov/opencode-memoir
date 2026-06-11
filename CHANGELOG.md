@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/disafronov/opencode-memoir/compare/v1.0.0...v1.0.1) (2026-06-11)
+
+### Bug Fixes
+
+* version ([a4234f6](https://github.com/disafronov/opencode-memoir/commit/a4234f65d970b161da5307a5747a9cc341be79ef))
+
 ## 1.0.0 (2026-06-11)
 
 ### Features
