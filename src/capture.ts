@@ -20,6 +20,12 @@ export interface ToolMetrics {
   errors: number;
 }
 
+interface MetricsEntry {
+  timestamp: number;
+  summary: string;
+  files: string[];
+}
+
 /**
  * Maximum entries retained in metrics.code.<branch>.
  * Mirrors MEMOIR_METRICS_CODE_MAX from plugins/claude-code/hooks/stop.sh.
@@ -194,7 +200,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
               files,
             };
 
-            let acc: { schema_version: number; entries: Array<Record<string, unknown>> } = {
+            let acc: { schema_version: number; entries: MetricsEntry[] } = {
               schema_version: 2, entries: [],
             };
             if (prevCodeRaw) {
@@ -208,7 +214,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
                 debugLog('flushCapture: failed to parse existing code metrics, starting fresh:', e instanceof Error ? e.message : String(e));
               }
             }
-            acc.entries.push(entry as unknown as Record<string, unknown>);
+            acc.entries.push(entry);
             if (acc.entries.length > METRICS_CODE_MAX) acc.entries = acc.entries.slice(-METRICS_CODE_MAX);
             codeWrite = runMemoir(['-s', store, 'remember', '--replace', JSON.stringify(acc), '-p', `metrics.code.${branchKey}`], { cwd: store });
           }
