@@ -12,6 +12,7 @@ import {
   recordToolMetrics,
   setCachedBranch,
   flushCapture,
+  setCliOverrides,
 } from '../src/capture.ts';
 import { ensuredStores, setPluginStoreOverride } from '../src/store.ts';
 
@@ -416,24 +417,330 @@ describe('flushCapture', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Paths NOT covered (require a source code seam or real memoir CLI)
-  //
-  // (1) Success path: When runMemoir writes succeed, the pending maps are
-  //     cleared and data is persisted to the memoir store. Without a real
-  //     memoir CLI or a mock injection point for runMemoir, the write
-  //     always fails, so this path cannot be exercised in unit tests
-  //     without modifying src/ to add a DI seam.
-  //
-  // (2) Branch resolution via getCurrentBranch: The code calls
-  //     getCurrentBranch(store) when sessionBranch is "unknown". This
-  //     uses runMemoir which returns an error string; JSON.parse on it
-  //     throws, and the catch falls back to "unknown". Testable in
-  //     principle but provides no additional behavioral coverage beyond
-  //     what the rollback tests already exercise.
-  //
-  // (3) Code metrics merge with pre-existing data: readMemoirValue
-  //     returns '' on failure, so the code starts with a fresh accumulator.
-  //     Merging with a non-empty previous value requires readMemoirValue
-  //     to succeed, which needs a real memoir CLI or mock injection.
+  // (f) Success / branch resolution / merge — CLI mocked via setCliOverrides
   // -----------------------------------------------------------------------
+  describe('flushCapture success/branch/merge (CLI mocked)', () => {
+    const SID = 'mock-session';
+    let callLog: Array<{ fn: string; args: unknown[] }>;
+    let tmpStore: string;
+
+    beforeEach(async () => {
+      tmpStore = await makeFakeStoreDir();
+      ensuredStores.add(tmpStore);
+      clearSession(SID);
+      callLog = [];
+
+      setCliOverrides({
+        getCurrentBranch: async (_store: string) => {
+          callLog.push({ fn: 'getCurrentBranch', args: [_store] });
+          return 'main';
+        },
+        readMemoirValue: async (_store: string, key: string, _ns?: string) => {
+          callLog.push({ fn: 'readMemoirValue', args: [_store, key, _ns] });
+          return '';
+        },
+        runMemoir: async (args: string[]) => {
+          callLog.push({ fn: 'runMemoir', args });
+          return 'ok';
+        },
+      });
+    });
+
+    afterEach(() => {
+      setCliOverrides(null);
+      clearSession(SID);
+      ensuredStores.delete(tmpStore);
+    });
+
+    // --- Path 1: success path — pending data cleared after flush ----------
+
+    it('clears pending edits after successful flush', async () => {
+      recordEdit(SID, {
+        tool: 'Edit',
+        filePath: '/tmp/success.ts',
+        snippet: 'x',
+        timestamp: 1_700_000_000,
+      });
+      recordEdit(SID, {
+        tool: 'Write',
+        filePath: '/tmp/other.ts',
+        snippet: 'y',
+        timestamp: 1_700_000_001,
+      });
+      assert.strictEqual(getPendingEdits(SID).length, 2);
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      assert.strictEqual(getPendingEdits(SID).length, 0, 'edits should be empty after success');
+    });
+
+    it('clears tool metrics after successful flush', async () => {
+      recordToolMetrics(SID, 'Edit', { calls: 5, errors: 1 });
+      recordToolMetrics(SID, 'Bash', { calls: 3, errors: 0 });
+      assert.strictEqual(getToolMetrics(SID).size, 2);
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      assert.strictEqual(getToolMetrics(SID).size, 0, 'metrics map should be empty after success');
+    });
+
+    it('calls runMemoir with correct code metrics args', async () => {
+      recordEdit(SID, {
+        tool: 'Edit',
+        filePath: '/tmp/a.ts',
+        snippet: 'z',
+        timestamp: 1_700_000_000,
+      });
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      const codeCalls = callLog.filter(
+        c => c.fn === 'runMemoir' && (c.args as string[]).includes('metrics.code.main'),
+      );
+      assert.strictEqual(codeCalls.length, 1, 'runMemoir should be called once for code metrics');
+
+      const args = codeCalls[0].args as string[];
+      // args = ['-s', store, 'remember', '--replace', JSON.stringify(acc), '-p', 'metrics.code.main']
+      assert.strictEqual(args[0], '-s');
+      assert.strictEqual(args[1], tmpStore);
+      assert.strictEqual(args[2], 'remember');
+      assert.strictEqual(args[3], '--replace');
+      // args[4] is the JSON payload
+      const payload = JSON.parse(args[4] as string);
+      assert.strictEqual(payload.schema_version, 2);
+      assert.strictEqual(payload.entries.length, 1);
+      assert.deepStrictEqual(payload.entries[0].files, ['/tmp/a.ts']);
+      assert.strictEqual(args[5], '-p');
+      assert.strictEqual(args[6], 'metrics.code.main');
+    });
+
+    it('calls runMemoir with correct turn metrics args', async () => {
+      recordToolMetrics(SID, 'Edit', { calls: 5, errors: 1 });
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      const turnCalls = callLog.filter(
+        c => c.fn === 'runMemoir' && (c.args as string[]).includes('metrics.turn.main'),
+      );
+      assert.strictEqual(turnCalls.length, 1, 'runMemoir should be called once for turn metrics');
+
+      const args = turnCalls[0].args as string[];
+      // args = ['-s', store, 'remember', '--replace', serializedMetrics, '-p', 'metrics.turn.main']
+      assert.strictEqual(args[0], '-s');
+      assert.strictEqual(args[1], tmpStore);
+      assert.strictEqual(args[2], 'remember');
+      assert.strictEqual(args[3], '--replace');
+      assert.strictEqual(args[4], 'Edit:5:1');
+      assert.strictEqual(args[5], '-p');
+      assert.strictEqual(args[6], 'metrics.turn.main');
+    });
+
+    // --- Path 2: branch resolution ---------------------------------------
+
+    it('uses getCurrentBranch when cached branch is unknown', async () => {
+      // Do NOT call setCachedBranch — getCachedBranch returns 'unknown' by default
+      recordEdit(SID, {
+        tool: 'Edit',
+        filePath: '/tmp/branch.ts',
+        snippet: 'b',
+        timestamp: 1_700_000_000,
+      });
+
+      await flushCapture(tmpStore, undefined, SID);
+
+      // getCurrentBranch should have been called (branch was 'unknown')
+      const cbCalls = callLog.filter(c => c.fn === 'getCurrentBranch');
+      assert.strictEqual(cbCalls.length, 1, 'getCurrentBranch should be called once');
+
+      // The branch key used in readMemoirValue should be the value
+      // returned by getCurrentBranch — 'main' (the mock default).
+      const readCalls = callLog.filter(c => c.fn === 'readMemoirValue');
+      assert.ok(readCalls.length > 0, 'readMemoirValue should be called');
+      assert.ok(
+        (readCalls[0].args as string[])[1].includes('metrics.code.main'),
+        `branch key should be 'main' from getCurrentBranch, got: ${(readCalls[0].args as string[])[1]}`,
+      );
+    });
+
+    it('skips getCurrentBranch when explicit branch param is provided', async () => {
+      setCachedBranch(SID, 'develop'); // cached, but should be ignored
+      recordEdit(SID, {
+        tool: 'Edit',
+        filePath: '/tmp/explicit.ts',
+        snippet: 'e',
+        timestamp: 1_700_000_000,
+      });
+
+      // Pass explicit branch 'release' — the code uses `branch ?? cachedBranchBySession.get(sid)`
+      await flushCapture(tmpStore, 'release', SID);
+
+      // getCurrentBranch must NOT be called — branch was already known
+      const cbCalls = callLog.filter(c => c.fn === 'getCurrentBranch');
+      assert.strictEqual(cbCalls.length, 0, 'getCurrentBranch should not be called with explicit branch');
+
+      // The branch key should be 'release' (the explicit param)
+      const readCalls = callLog.filter(c => c.fn === 'readMemoirValue');
+      assert.ok(readCalls.length > 0, 'readMemoirValue should be called');
+      assert.ok(
+        (readCalls[0].args as string[])[1].includes('metrics.code.release'),
+        `branch key should be 'release', got: ${(readCalls[0].args as string[])[1]}`,
+      );
+    });
+
+    // --- Path 3: merge with pre-existing data -----------------------------
+
+    it('merges code metrics with pre-existing stored entries', async () => {
+      const existingEntries = [
+        { timestamp: 1_600_000_000, summary: 'old 1', files: ['a.ts'] },
+        { timestamp: 1_600_000_001, summary: 'old 2', files: ['b.ts'] },
+      ];
+      const existingCode = JSON.stringify({ schema_version: 2, entries: existingEntries });
+
+      // Override readMemoirValue to return pre-existing data for code metrics
+      setCliOverrides({
+        getCurrentBranch: async () => 'main',
+        readMemoirValue: async (_store: string, key: string) => {
+          callLog.push({ fn: 'readMemoirValue', args: [_store, key] });
+          if (key === 'metrics.code.main') return existingCode;
+          return '';
+        },
+        runMemoir: async (args: string[]) => {
+          callLog.push({ fn: 'runMemoir', args });
+          return 'ok';
+        },
+      });
+
+      recordEdit(SID, {
+        tool: 'Edit',
+        filePath: '/tmp/new.ts',
+        snippet: 'n',
+        timestamp: 1_700_000_000,
+      });
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      // The runMemoir call for code metrics should contain 2 existing + 1 new = 3 entries
+      const codeCalls = callLog.filter(
+        c => c.fn === 'runMemoir' && (c.args as string[]).includes('metrics.code.main'),
+      );
+      assert.strictEqual(codeCalls.length, 1);
+      const payload = JSON.parse((codeCalls[0].args as string[])[4] as string);
+      assert.strictEqual(payload.entries.length, 3, 'should have 2 existing + 1 new entry');
+      assert.strictEqual(payload.schema_version, 2, 'schema_version should be preserved');
+      assert.deepStrictEqual(payload.entries[0].files, ['a.ts'], 'first entry should be the old one');
+      assert.deepStrictEqual(payload.entries[2].files, ['/tmp/new.ts'], 'last entry should be the new one');
+    });
+
+    it('merges turn metrics with existing counters (sums calls/errors)', async () => {
+      // Pre-existing: Edit:5:1 | Read:10:0
+      const existingTurn = 'Edit:5:1 | Read:10:0';
+
+      setCliOverrides({
+        getCurrentBranch: async () => 'main',
+        readMemoirValue: async (_store: string, key: string) => {
+          callLog.push({ fn: 'readMemoirValue', args: [_store, key] });
+          if (key === 'metrics.turn.main') return existingTurn;
+          return '';
+        },
+        runMemoir: async (args: string[]) => {
+          callLog.push({ fn: 'runMemoir', args });
+          return 'ok';
+        },
+      });
+
+      // Record Edit:{calls:3, errors:1} — should sum with existing {5:1} → {8:2}
+      recordToolMetrics(SID, 'Edit', { calls: 3, errors: 1 });
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      const turnCalls = callLog.filter(
+        c => c.fn === 'runMemoir' && (c.args as string[]).includes('metrics.turn.main'),
+      );
+      assert.strictEqual(turnCalls.length, 1);
+      const serialized = (turnCalls[0].args as string[])[4] as string;
+      // Edit should be 5+3=8 calls, 1+1=2 errors; Read untouched
+      assert.ok(serialized.includes('Edit:8:2'), `Edit should be Edit:8:2, got: ${serialized}`);
+      assert.ok(serialized.includes('Read:10:0'), `Read should be Read:10:0, got: ${serialized}`);
+    });
+
+    it('preserves untouched tools during turn merge', async () => {
+      const existingTurn = 'Bash:20:3 | Grep:50:0';
+
+      setCliOverrides({
+        getCurrentBranch: async () => 'main',
+        readMemoirValue: async (_store: string, key: string) => {
+          callLog.push({ fn: 'readMemoirValue', args: [_store, key] });
+          if (key === 'metrics.turn.main') return existingTurn;
+          return '';
+        },
+        runMemoir: async (args: string[]) => {
+          callLog.push({ fn: 'runMemoir', args });
+          return 'ok';
+        },
+      });
+
+      // Record a tool not in the existing set
+      recordToolMetrics(SID, 'Edit', { calls: 2, errors: 0 });
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      const turnCalls = callLog.filter(
+        c => c.fn === 'runMemoir' && (c.args as string[]).includes('metrics.turn.main'),
+      );
+      assert.strictEqual(turnCalls.length, 1);
+      const serialized = (turnCalls[0].args as string[])[4] as string;
+      // Existing tools preserved, new tool added
+      assert.ok(serialized.includes('Bash:20:3'), 'Bash should be preserved');
+      assert.ok(serialized.includes('Grep:50:0'), 'Grep should be preserved');
+      assert.ok(serialized.includes('Edit:2:0'), 'Edit should be present');
+    });
+
+    it('caps code metrics at METRICS_CODE_MAX (FIFO eviction)', async () => {
+      // Pre-populate with exactly METRICS_CODE_MAX entries
+      const maxEntries = Array.from({ length: 1000 }, (_, i) => ({
+        timestamp: 1_600_000_000 + i,
+        summary: `entry ${i}`,
+        files: [`file-${i}.ts`],
+      }));
+      const existingCode = JSON.stringify({ schema_version: 2, entries: maxEntries });
+
+      setCliOverrides({
+        getCurrentBranch: async () => 'main',
+        readMemoirValue: async (_store: string, key: string) => {
+          callLog.push({ fn: 'readMemoirValue', args: [_store, key] });
+          if (key === 'metrics.code.main') return existingCode;
+          return '';
+        },
+        runMemoir: async (args: string[]) => {
+          callLog.push({ fn: 'runMemoir', args });
+          return 'ok';
+        },
+      });
+
+      recordEdit(SID, {
+        tool: 'Edit',
+        filePath: '/tmp/cap.ts',
+        snippet: 'c',
+        timestamp: 1_700_000_000,
+      });
+
+      await flushCapture(tmpStore, 'main', SID);
+
+      const codeCalls = callLog.filter(
+        c => c.fn === 'runMemoir' && (c.args as string[]).includes('metrics.code.main'),
+      );
+      assert.strictEqual(codeCalls.length, 1);
+      const payload = JSON.parse((codeCalls[0].args as string[])[4] as string);
+      assert.strictEqual(
+        payload.entries.length,
+        1000,
+        `should be capped at METRICS_CODE_MAX, got ${payload.entries.length}`,
+      );
+      // The oldest entry (index 0: file-0.ts) should have been evicted;
+      // the first entry should now be file-1.ts
+      assert.deepStrictEqual(payload.entries[0].files, ['file-1.ts'], 'oldest entry should be evicted');
+      // The last entry should be the new one
+      assert.deepStrictEqual(payload.entries[999].files, ['/tmp/cap.ts'], 'new entry should be appended');
+    });
+  });
 });
