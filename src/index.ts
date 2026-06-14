@@ -337,7 +337,11 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
         const unmerged: string[] = [];
         for (const branch of branches) {
           if (branch === 'main') continue;
-          const diffOut = await runMemoir(['-s', store, 'diff', branch, 'main', '--stat'], { cwd: store }).catch((e) => { debugLog('command.execute.before: memoir diff failed', errorMessage(e)); return ''; });
+          const diffOut = await runMemoir(['-s', store, 'diff', branch, 'main', '--stat'], { cwd: store });
+          if (diffOut.startsWith('Memoir command failed')) {
+            debugLog('command.execute.before: memoir diff failed', diffOut);
+            continue;
+          }
           if (diffOut.trim()) {
             unmerged.push(branch);
           }
