@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { coercePaths, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from '../src/utils.ts';
+import { coercePaths, errorMessage, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from '../src/utils.ts';
 import { SECRET_PATTERN, isSecretSanitizationEnabled } from '../src/recall-gate.ts';
 import { parseTurnMetrics, serializeTurnMetrics } from '../src/capture.ts';
 
@@ -52,19 +52,19 @@ describe('tryPrettyJson', () => {
 
 describe('SECRET_PATTERN', () => {
   it('matches API keys', () => {
-    assert.ok(SECRET_PATTERN.test('api_key=sk-1234'));
-    assert.ok(SECRET_PATTERN.test('apikey=abc123'));
-    assert.ok(SECRET_PATTERN.test('api-key=xyz789'));
+    assert.ok(SECRET_PATTERN.test('api_key=sk-1234567890abcdef'));
+    assert.ok(SECRET_PATTERN.test('apikey=abc123456789'));
+    assert.ok(SECRET_PATTERN.test('api-key=xyz789012345'));
   });
 
   it('matches tokens', () => {
-    assert.ok(SECRET_PATTERN.test('auth_token=ghp_xxx'));
+    assert.ok(SECRET_PATTERN.test('auth_token=ghp_abcdefghij123456'));
     assert.ok(SECRET_PATTERN.test('token=eyJhbGci'));
   });
 
   it('matches passwords', () => {
-    assert.ok(SECRET_PATTERN.test('password=hunter2'));
-    assert.ok(SECRET_PATTERN.test('passwd=s3cret'));
+    assert.ok(SECRET_PATTERN.test('password=hunter2islong'));
+    assert.ok(SECRET_PATTERN.test('passwd=s3cretislong'));
   });
 
   it('matches private keys', () => {
@@ -94,11 +94,29 @@ describe('SECRET_PATTERN', () => {
     // itself still matches; the disable is controlled at the call site.
     const original = process.env.MEMOIR_SANITIZE_SECRETS;
     delete process.env.MEMOIR_SANITIZE_SECRETS;
-    assert.ok(SECRET_PATTERN.test('api_key=sk-1234'), 'default enabled');
+    assert.ok(SECRET_PATTERN.test('api_key=sk-1234567890abcdef'), 'default enabled');
     process.env.MEMOIR_SANITIZE_SECRETS = '0';
     // Pattern itself is unchanged — gating is at the call site
-    assert.ok(SECRET_PATTERN.test('api_key=sk-1234'), 'pattern unchanged');
+    assert.ok(SECRET_PATTERN.test('api_key=sk-1234567890abcdef'), 'pattern unchanged');
     process.env.MEMOIR_SANITIZE_SECRETS = original ?? '';
+  });
+});
+
+describe('errorMessage', () => {
+  it('extracts message from Error instances', () => {
+    assert.strictEqual(errorMessage(new Error('test')), 'test');
+  });
+
+  it('converts non-Error values to string', () => {
+    assert.strictEqual(errorMessage('string error'), 'string error');
+  });
+
+  it('handles null', () => {
+    assert.strictEqual(errorMessage(null), 'null');
+  });
+
+  it('handles undefined', () => {
+    assert.strictEqual(errorMessage(undefined), 'undefined');
   });
 });
 
