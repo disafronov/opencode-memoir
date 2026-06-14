@@ -37,6 +37,16 @@ type MemoirGetArgs = {
   namespace?: string;
 };
 
+/** Ensure the memoir store exists, returning an error message on failure. */
+async function ensureStoreOrError(store: string): Promise<string | null> {
+  try {
+    await ensureStore(store);
+    return null;
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
 async function statusJson(store: string): Promise<string> {
   await ensureStore(store);
   const raw = await runMemoir(['--json', '-s', store, 'status'], { cwd: store });
@@ -223,11 +233,8 @@ const memoirRemember = tool({
     }
 
     const store = deriveStorePath();
-    try {
-      await ensureStore(store);
-    } catch (error) {
-      return errorMessage(error);
-    }
+    const storeError = await ensureStoreOrError(store);
+    if (storeError) return storeError;
 
     const cliArgs = ['--json', '-s', store, 'remember', content];
     for (const p of paths) cliArgs.push('-p', p);
@@ -247,11 +254,8 @@ const memoirRecall = tool({
   },
   execute: async (args: MemoirRecallArgs) => {
     const store = deriveStorePath();
-    try {
-      await ensureStore(store);
-    } catch (error) {
-      return errorMessage(error);
-    }
+    const storeError = await ensureStoreOrError(store);
+    if (storeError) return storeError;
 
     const namespaces = args.namespace
       ? [args.namespace]
@@ -283,11 +287,8 @@ const memoirGet = tool({
     }
 
     const store = deriveStorePath();
-    try {
-      await ensureStore(store);
-    } catch (error) {
-      return errorMessage(error);
-    }
+    const storeError = await ensureStoreOrError(store);
+    if (storeError) return storeError;
 
     return tryPrettyJson(await runMemoir(['--json', '-s', store, 'get', ...keys, '-n', args.namespace ?? 'default'], { cwd: store }));
   },
