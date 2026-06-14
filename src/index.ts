@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { type Config, type Plugin, type PluginModule, tool } from '@opencode-ai/plugin';
-import { autoMatchMemoirBranch, codeGitBranch, deriveStorePath, ensureStore, memoirResolved, memoirSpawnSpecs, runMemoir, setPluginStoreOverride } from './store.js';
+import { autoMatchMemoirBranch, codeGitBranch, deriveStorePath, ensureStore, memoirResolved, memoirSpawnSpecs, reorderResolver, runMemoir, setPluginStoreOverride } from './store.js';
 import { EDIT_TOOLS, flushCapture, getCachedBranch, recordEdit, recordToolMetrics, setCachedBranch } from './capture.js';
 import { DEFAULT_RECALL_NAMESPACES, isSecretSanitizationEnabled, pendingRecall, SECRET_PATTERN, shouldTriggerRecall } from './recall-gate.js';
 import { coercePaths, errorMessage, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from './utils.js';
@@ -75,14 +75,11 @@ async function launchUi(store: string): Promise<string> {
   }
 
   let lastError = '';
-  const uiSpecs = memoirSpawnSpecs(['ui', store]);
+  let uiSpecs = memoirSpawnSpecs(['ui', store]);
   // Reorder: put cached memoir resolver first, same as runMemoir
   if (memoirResolved) {
-    const idx = uiSpecs.findIndex(s => s.label === memoirResolved);
-    if (idx > 0) {
-      const [cached] = uiSpecs.splice(idx, 1);
-      uiSpecs.unshift(cached);
-    }
+    const winner = uiSpecs.find(s => s.label === memoirResolved);
+    if (winner) uiSpecs = reorderResolver(uiSpecs, winner);
   }
   for (const spec of uiSpecs) {
     const child = spawn(spec.command, spec.args, {
