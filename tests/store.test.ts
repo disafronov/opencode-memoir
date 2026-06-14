@@ -1,7 +1,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { deriveStorePath } from '../src/store.ts';
+import { deriveStorePath, reorderResolver } from '../src/store.ts';
 
 describe('deriveStorePath', () => {
   afterEach(() => {
@@ -32,5 +32,36 @@ describe('deriveStorePath', () => {
   it('handles cwd with hyphens and underscores', () => {
     const result = deriveStorePath('/home/user/my_project-v2');
     assert.ok(result.includes('my_project-v2'));
+  });
+});
+
+describe('reorderResolver', () => {
+  it('returns a new array with winner first', () => {
+    assert.deepStrictEqual(reorderResolver(['a', 'b', 'c'], 'b'), ['b', 'a', 'c']);
+  });
+
+  it('does not mutate the input array', () => {
+    const input = ['a', 'b', 'c'];
+    const inputRef = input;
+    reorderResolver(input, 'b');
+    assert.deepStrictEqual(input, inputRef);
+  });
+
+  it('returns copy when winner is already first', () => {
+    const input = ['a', 'b', 'c'];
+    const result = reorderResolver(input, 'a');
+    assert.deepStrictEqual(result, ['a', 'b', 'c']);
+    assert.notStrictEqual(result, input); // is a copy, not same reference
+  });
+
+  it('returns copy when winner is not found', () => {
+    const input = ['a', 'b', 'c'];
+    const result = reorderResolver(input, 'd');
+    assert.deepStrictEqual(result, ['a', 'b', 'c']);
+    assert.notStrictEqual(result, input); // is a copy
+  });
+
+  it('handles single-element array', () => {
+    assert.deepStrictEqual(reorderResolver(['a'], 'a'), ['a']);
   });
 });
