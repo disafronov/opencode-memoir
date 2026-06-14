@@ -19,6 +19,9 @@ export const MEMOIR_AI_PIN = '0.2.2';
 
 export type SpawnSpec = { command: string; args: string[]; label: string };
 
+/** Max entries in _noGitCache before eviction. */
+const NO_GIT_CACHE_MAX = 500;
+
 /**
  * Cache of cwds confirmed to be outside a git repo.
  * Avoids redundant ~200ms failing `git rev-parse` calls on non-git directories.
@@ -66,6 +69,7 @@ export function _main_worktree_root(cwd: string): string {
   } catch (e) {
     debugLog('_main_worktree_root: not a git repo or git error:', errorMessage(e));
     _noGitCache.add(cwd);
+    if (_noGitCache.size > NO_GIT_CACHE_MAX) _noGitCache.clear();
     return '';
   }
 }
@@ -118,6 +122,9 @@ export function setPluginStoreOverride(store: string | undefined): void {
   pluginStoreOverride = store;
 }
 
+/** Max entries in ensuredStores before eviction. */
+const ENSURED_STORES_MAX = 200;
+
 /** Cache of stores already verified or created — avoids redundant access() + CLI calls. */
 export const ensuredStores = new Set<string>();
 
@@ -140,6 +147,7 @@ export async function ensureStore(store: string): Promise<void> {
   try {
     await access(join(store, '.git'));
     ensuredStores.add(store);
+    if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
     return; // already exists
   } catch {
     // ensure parent dir exists (memoir new doesn't create intermediate dirs)
@@ -157,6 +165,7 @@ export async function ensureStore(store: string): Promise<void> {
         throw new Error(result);
       }
       ensuredStores.add(store);
+      if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
     } finally {
       rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
     }

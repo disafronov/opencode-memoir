@@ -26,6 +26,13 @@ interface MetricsEntry {
   files: string[];
 }
 
+/** Evict the oldest entry from a Map when it exceeds maxSize. */
+function evictOldest<K, V>(map: Map<K, V>, maxSize: number): void {
+  if (map.size <= maxSize) return;
+  const firstKey = map.keys().next().value;
+  if (firstKey !== undefined) map.delete(firstKey);
+}
+
 /**
  * Maximum entries retained in metrics.code.<branch>.
  * Mirrors MEMOIR_METRICS_CODE_MAX from plugins/claude-code/hooks/stop.sh.
@@ -46,19 +53,20 @@ export function getCachedBranch(sessionID: string): string {
 
 export function setCachedBranch(sessionID: string, branch: string): void {
   cachedBranchBySession.set(sessionID, branch);
+  evictOldest(cachedBranchBySession, 200);
 }
 
 /** Record an edit for a specific session. */
 export function recordEdit(sessionID: string, edit: EditRecord): void {
   let edits = pendingEditsBySession.get(sessionID);
-  if (!edits) { edits = []; pendingEditsBySession.set(sessionID, edits); }
+  if (!edits) { edits = []; pendingEditsBySession.set(sessionID, edits); evictOldest(pendingEditsBySession, 500); }
   edits.push(edit);
 }
 
 /** Accumulate tool metrics for a specific session (adds to previous values). */
 export function recordToolMetrics(sessionID: string, tool: string, metrics: ToolMetrics): void {
   let sessionMetrics = toolMetricsBySession.get(sessionID);
-  if (!sessionMetrics) { sessionMetrics = new Map(); toolMetricsBySession.set(sessionID, sessionMetrics); }
+  if (!sessionMetrics) { sessionMetrics = new Map(); toolMetricsBySession.set(sessionID, sessionMetrics); evictOldest(toolMetricsBySession, 500); }
   const prev = sessionMetrics.get(tool) ?? { calls: 0, errors: 0 };
   sessionMetrics.set(tool, {
     calls: prev.calls + metrics.calls,
