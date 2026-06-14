@@ -1,3 +1,12 @@
+## [1.1.1](https://github.com/disafronov/opencode-memoir/compare/v1.1.0...v1.1.1) (2026-06-14)
+
+### Bug Fixes
+
+* add .catch() to fire-and-forget async IIFE in event hook ([9f80b20](https://github.com/disafronov/opencode-memoir/commit/9f80b206f47133ba545f79330f3975cc63ae1a72))
+* do not count failed diffs as unmerged branches ([bef5b74](https://github.com/disafronov/opencode-memoir/commit/bef5b7496cea9b3c767fdca1c64c3f7049f31829))
+* return error string from statusJson instead of throwing ([62c4145](https://github.com/disafronov/opencode-memoir/commit/62c4145b41789b61084775f87df839bb31bf31b9))
+* wrap dispose hook and ensureStore creation in try/catch ([daae5fd](https://github.com/disafronov/opencode-memoir/commit/daae5fd1596be62066f0d78527e3aa0c0f7120d1))
+
 ## [1.1.0](https://github.com/disafronov/opencode-memoir/compare/v1.0.8...v1.1.0) (2026-06-14)
 
 ### Features
