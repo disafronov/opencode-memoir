@@ -1,3 +1,13 @@
+## [1.1.0](https://github.com/disafronov/opencode-memoir/compare/v1.0.8...v1.1.0) (2026-06-14)
+
+### Features
+
+* expand SECRET_PATTERN with AWS, connection string, and PEM key detection ([5fa7de0](https://github.com/disafronov/opencode-memoir/commit/5fa7de00d57905ff8c197c67c02a2b5c65028cb1))
+
+### Bug Fixes
+
+* wire expanded SECRET_PATTERN from utils.ts into recall-gate.ts ([1020abf](https://github.com/disafronov/opencode-memoir/commit/1020abf76f5b9fc2a00daa81d53895c8c1db5004))
+
 ## [1.0.7](https://github.com/disafronov/opencode-memoir/compare/v1.0.6...v1.0.7) (2026-06-11)
 
 ### Bug Fixes
