@@ -21,3 +21,8 @@ export function tryPrettyJson(text: string): string {
 
 /** Max keys memoir_get accepts to avoid hitting OS arg-length limits. */
 export const MEMOIR_GET_MAX_KEYS = 20;
+
+/** Safely extract a display string from an unknown thrown value. */
+export function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}

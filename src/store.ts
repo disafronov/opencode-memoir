@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { debugLog } from './debug.js';
+import { errorMessage } from './utils.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -63,7 +64,7 @@ export function _main_worktree_root(cwd: string): string {
     // Fallback: try --show-toplevel (bare repo or older git)
     return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: 3000 }).trim();
   } catch (e) {
-    debugLog('_main_worktree_root: not a git repo or git error:', e instanceof Error ? e.message : String(e));
+    debugLog('_main_worktree_root: not a git repo or git error:', errorMessage(e));
     _noGitCache.add(cwd);
     return '';
   }
@@ -246,7 +247,7 @@ export async function codeGitBranch(): Promise<string> {
     const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { encoding: 'utf8', timeout: 3000 });
     return stdout.trim();
   } catch (e) {
-    debugLog('codeGitBranch: failed:', e instanceof Error ? e.message : String(e));
+    debugLog('codeGitBranch: failed:', errorMessage(e));
     return '';
   }
 }

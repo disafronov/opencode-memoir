@@ -1,5 +1,6 @@
 import { deriveStorePath, ensureStore, getCurrentBranch, readMemoirValue, runMemoir } from './store.js';
 import { debugLog } from './debug.js';
+import { errorMessage } from './utils.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -253,6 +254,6 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
       releaseLock();
     }
   } catch (e) {
-    debugLog('flushCapture: failed:', e instanceof Error ? e.message : String(e));
+    debugLog('flushCapture: failed:', errorMessage(e));
   }
 }

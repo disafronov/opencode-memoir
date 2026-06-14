@@ -7,7 +7,7 @@ import { type Config, type Plugin, type PluginModule, tool } from '@opencode-ai/
 import { autoMatchMemoirBranch, codeGitBranch, deriveStorePath, ensureStore, memoirResolved, memoirSpawnSpecs, runMemoir, setPluginStoreOverride } from './store.js';
 import { EDIT_TOOLS, flushCapture, getCachedBranch, recordEdit, recordToolMetrics, setCachedBranch } from './capture.js';
 import { DEFAULT_RECALL_NAMESPACES, isSecretSanitizationEnabled, pendingRecall, SECRET_PATTERN, shouldTriggerRecall } from './recall-gate.js';
-import { coercePaths, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from './utils.js';
+import { coercePaths, errorMessage, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from './utils.js';
 import { debugLog } from './debug.js';
 
 type CommandOutput = {
@@ -46,7 +46,7 @@ async function statusJson(store: string): Promise<string> {
     data.opencode = { store, project_git_root: process.cwd(), project_git_branch: branch };
     return JSON.stringify(data, null, 2);
   } catch (e) {
-    debugLog('statusJson: failed to parse JSON:', e instanceof Error ? e.message : String(e));
+    debugLog('statusJson: failed to parse JSON:', errorMessage(e));
     return raw;
   }
 }
@@ -65,12 +65,12 @@ async function launchUi(store: string): Promise<string> {
         process.kill(Number(existing.pid), 0); // check if alive
         return JSON.stringify({ ...existing, reused: true }, null, 2);
       } catch (e) {
-        debugLog('launchUi: process dead, relaunching:', e instanceof Error ? e.message : String(e));
+        debugLog('launchUi: process dead, relaunching:', errorMessage(e));
         // process is dead — fall through to relaunch
       }
     }
   } catch (e) {
-    debugLog('launchUi: failed to read pidfile:', e instanceof Error ? e.message : String(e));
+    debugLog('launchUi: failed to read pidfile:', errorMessage(e));
     await rm(pidfile, { force: true }).catch(() => undefined);
   }
 
@@ -96,7 +96,7 @@ async function launchUi(store: string): Promise<string> {
     child.stderr?.on('data', chunk => { output += String(chunk); });
 
     const spawnFailed = new Promise<string | null>(resolve => {
-      child.once('error', error => resolve(String(error.message || error)));
+      child.once('error', error => resolve(errorMessage(error)));
       child.once('spawn', () => resolve(null));
     });
     const error = await spawnFailed;
@@ -229,7 +229,7 @@ const memoirRemember = tool({
     try {
       await ensureStore(store);
     } catch (error) {
-      return String((error as Error).message || error);
+      return errorMessage(error);
     }
 
     const cliArgs = ['--json', '-s', store, 'remember', content];
@@ -253,7 +253,7 @@ const memoirRecall = tool({
     try {
       await ensureStore(store);
     } catch (error) {
-      return String((error as Error).message || error);
+      return errorMessage(error);
     }
 
     const namespaces = args.namespace
@@ -289,7 +289,7 @@ const memoirGet = tool({
     try {
       await ensureStore(store);
     } catch (error) {
-      return String((error as Error).message || error);
+      return errorMessage(error);
     }
 
     return tryPrettyJson(await runMemoir(['--json', '-s', store, 'get', ...keys, '-n', args.namespace ?? 'default'], { cwd: store }));
@@ -344,7 +344,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
         );
       }
     } catch (error) {
-      pushText(output, `Memoir command failed: ${String((error as Error).message || error)}`);
+      pushText(output, `Memoir command failed: ${errorMessage(error)}`);
     }
   },
 
@@ -358,7 +358,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
     try {
       output.env.MEMOIR_STORE = storeRoot;
     } catch (e) {
-      debugLog('shell.env: failed:', e instanceof Error ? e.message : String(e));
+      debugLog('shell.env: failed:', errorMessage(e));
     }
   },
 
@@ -392,7 +392,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
         }
       }
     } catch (e) {
-      debugLog('tool.execute.after: failed:', e instanceof Error ? e.message : String(e));
+      debugLog('tool.execute.after: failed:', errorMessage(e));
     }
   },
 
@@ -433,7 +433,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
         await flushCapture(storeRoot, prevBranch, sid);
       }
     } catch (e) {
-      debugLog('chat.message: failed:', e instanceof Error ? e.message : String(e));
+      debugLog('chat.message: failed:', errorMessage(e));
     }
   },
 
@@ -457,7 +457,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
           const pretty = tryPrettyJson(taxonomy);
           initContext = `[memoir] Available taxonomy paths:\n${pretty}`;
         } catch (e: unknown) {
-          debugLog('event: taxonomy fetch failed, will retry on next session:', e instanceof Error ? e.message : String(e));
+          debugLog('event: taxonomy fetch failed, will retry on next session:', errorMessage(e));
           // Allow a later session to retry — the store may not have been ready yet.
           initContextFetched = false;
         }
@@ -490,7 +490,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
         );
       }
     } catch (e) {
-      debugLog('system.transform: failed:', e instanceof Error ? e.message : String(e));
+      debugLog('system.transform: failed:', errorMessage(e));
     }
   },
 
