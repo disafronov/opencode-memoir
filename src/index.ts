@@ -10,6 +10,12 @@ import { DEFAULT_RECALL_NAMESPACES, isSecretSanitizationEnabled, pendingRecall, 
 import { coercePaths, errorMessage, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from './utils.js';
 import { debugLog } from './debug.js';
 
+/** Timeout (ms) for UI URL detection polling. */
+const UI_URL_DEADLINE_MS = 5_000;
+
+/** Polling interval (ms) for UI URL detection. */
+const UI_URL_POLL_MS = 100;
+
 type CommandOutput = {
   parts: unknown[];
 };
@@ -115,7 +121,7 @@ async function launchUi(store: string): Promise<string> {
     child.unref();
 
     const urlPattern = /https?:\/\/(?:localhost|127\.0\.0\.1):\d+\S*/;
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + UI_URL_DEADLINE_MS;
     while (Date.now() < deadline) {
       const match = output.match(urlPattern);
       if (match) {
@@ -124,7 +130,7 @@ async function launchUi(store: string): Promise<string> {
         await writeFile(pidfile, JSON.stringify(data, null, 2));
         return JSON.stringify(data, null, 2);
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, UI_URL_POLL_MS));
     }
 
     return `Memoir UI started with ${spec.label} (pid ${child.pid ?? 'unknown'}), but URL was not detected yet.\n${output.trim()}`.trim();
