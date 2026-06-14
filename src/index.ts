@@ -54,7 +54,8 @@ async function ensureStoreOrError(store: string): Promise<string | null> {
 }
 
 async function statusJson(store: string): Promise<string> {
-  await ensureStore(store);
+  const storeErr = await ensureStoreOrError(store);
+  if (storeErr) return `Memoir command failed: ${storeErr}`;
   const raw = await runMemoir(['--json', '-s', store, 'status'], { cwd: store });
   try {
     const data = JSON.parse(raw);
