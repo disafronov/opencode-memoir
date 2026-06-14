@@ -465,7 +465,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
           // Allow a later session to retry — the store may not have been ready yet.
           initContextFetched = false;
         }
-      })();
+      })().catch(() => { initContextFetched = false; });
     }
   },
 
