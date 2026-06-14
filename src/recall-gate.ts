@@ -1,4 +1,4 @@
-export const SECRET_PATTERN = /(api[_-]?key|auth_token|access_token|\btoken\b|\bsecret\b|\bpassword\b|\bpasswd\b|private[_-]?key|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
+export { SECRET_PATTERN } from './utils.js';
 
 /** Whether secret sanitization is enabled. Default on. Set MEMOIR_SANITIZE_SECRETS=0 to disable. */
 export function isSecretSanitizationEnabled(): boolean {
