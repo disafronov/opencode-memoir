@@ -87,7 +87,7 @@ async function launchUi(store: string): Promise<string> {
     }
   } catch (e) {
     debugLog('launchUi: failed to read pidfile:', errorMessage(e));
-    await rm(pidfile, { force: true }).catch(() => undefined);
+    await rm(pidfile, { force: true }).catch((e) => debugLog('launchUi: failed to remove stale pidfile', errorMessage(e)));
   }
 
   let lastError = '';
@@ -336,7 +336,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
         const unmerged: string[] = [];
         for (const branch of branches) {
           if (branch === 'main') continue;
-          const diffOut = await runMemoir(['-s', store, 'diff', branch, 'main', '--stat'], { cwd: store }).catch(() => '');
+          const diffOut = await runMemoir(['-s', store, 'diff', branch, 'main', '--stat'], { cwd: store }).catch((e) => { debugLog('command.execute.before: memoir diff failed', errorMessage(e)); return ''; });
           if (diffOut.trim()) {
             unmerged.push(branch);
           }
