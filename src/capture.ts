@@ -219,7 +219,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
                   if (acc.schema_version < 2) acc.schema_version = 2;
                 }
               } catch (e) {
-                debugLog('flushCapture: failed to parse existing code metrics, starting fresh:', e instanceof Error ? e.message : String(e));
+                debugLog('flushCapture: failed to parse existing code metrics, starting fresh:', errorMessage(e));
               }
             }
             acc.entries.push(entry);

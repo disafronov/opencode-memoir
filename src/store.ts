@@ -110,7 +110,7 @@ export function deriveStorePath(cwd: string = process.cwd()): string {
       projectDir = resolve(cwd);
     }
   } catch (e) {
-    debugLog('deriveStorePath: unexpected error:', e instanceof Error ? e.message : String(e));
+    debugLog('deriveStorePath: unexpected error:', errorMessage(e));
     // Fallback to raw cwd if everything else fails
     projectDir = cwd;
   }
@@ -160,7 +160,7 @@ export async function ensureStore(store: string): Promise<void> {
     return; // already exists
   } catch {
     // ensure parent dir exists (memoir new doesn't create intermediate dirs)
-    await mkdir(join(store, '..'), { recursive: true }).catch((e: unknown) => debugLog('ensureStore: mkdir failed:', e instanceof Error ? e.message : String(e)));
+    await mkdir(join(store, '..'), { recursive: true }).catch((e: unknown) => debugLog('ensureStore: mkdir failed:', errorMessage(e)));
   }
 
   // Register this creation so concurrent callers coallesce
@@ -223,7 +223,7 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
       memoirResolved = spec.label;
       return stdout.trim();
     } catch (e) {
-      debugLog('runMemoir: fallback', spec.label, 'failed:', e instanceof Error ? e.message : String(e));
+      debugLog('runMemoir: fallback', spec.label, 'failed:', errorMessage(e));
       // Invalidate cache so we don't keep trying a broken resolver on next call
       if (memoirResolved === spec.label) memoirResolved = null;
     }
@@ -260,7 +260,7 @@ export async function getCurrentBranch(store: string): Promise<string> {
     const data = JSON.parse(raw);
     return data.branch || 'unknown';
   } catch (e) {
-    debugLog('getCurrentBranch: failed:', e instanceof Error ? e.message : String(e));
+    debugLog('getCurrentBranch: failed:', errorMessage(e));
     return 'unknown';
   }
 }
@@ -292,7 +292,7 @@ export async function branchExistsInMemoir(store: string, name: string): Promise
     const branches: string[] = data?.branches ?? [];
     return branches.includes(name);
   } catch (e) {
-    debugLog('branchExistsInMemoir: failed:', e instanceof Error ? e.message : String(e));
+    debugLog('branchExistsInMemoir: failed:', errorMessage(e));
     return false;
   }
 }
@@ -341,7 +341,7 @@ export async function readMemoirValue(store: string, key: string, namespace: str
     const value = items[0]?.value?.content;
     return typeof value === 'string' ? value : '';
   } catch (e) {
-    debugLog('readMemoirValue: failed:', e instanceof Error ? e.message : String(e));
+    debugLog('readMemoirValue: failed:', errorMessage(e));
     return '';
   }
 }
