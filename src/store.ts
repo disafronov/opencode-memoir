@@ -169,19 +169,29 @@ export async function ensureStore(store: string): Promise<void> {
   }
 }
 
+/**
+ * Reorder a cached resolver list so that `winner` is first.
+ * Returns a new array (does not mutate the input).
+ */
+export function reorderResolver<T>(resolver: T[], winner: T): T[] {
+  const idx = resolver.indexOf(winner);
+  if (idx <= 0) return [...resolver];
+  const next = [...resolver];
+  next.splice(idx, 1);
+  next.unshift(winner);
+  return next;
+}
+
 /** Which CLI launcher successfully resolved memoir. Cached to avoid redundant fallback probing. */
 export let memoirResolved: string | null = null;
 
 export async function runMemoir(args: string[], options: { cwd?: string } = {}): Promise<string> {
-  const specs = memoirSpawnSpecs(args);
+  let specs = memoirSpawnSpecs(args);
 
   // Put cached resolver first so we skip redundant fallback probing
   if (memoirResolved) {
-    const idx = specs.findIndex(s => s.label === memoirResolved);
-    if (idx > 0) {
-      const [cached] = specs.splice(idx, 1);
-      specs.unshift(cached);
-    }
+    const winner = specs.find(s => s.label === memoirResolved);
+    if (winner) specs = reorderResolver(specs, winner);
   }
 
   for (const spec of specs) {
