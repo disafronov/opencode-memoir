@@ -503,10 +503,14 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
    * and metrics (cf. SessionEnd heartbeat cleanup + final metrics flush).
    */
   dispose: async () => {
-    // No sessionID → flushCapture flushes ALL sessions
-    await flushCapture(storeRoot);
-    pruneStaleSessions();
-    sessionsWithContext.clear();
+    try {
+      // No sessionID → flushCapture flushes ALL sessions
+      await flushCapture(storeRoot);
+      pruneStaleSessions();
+      sessionsWithContext.clear();
+    } catch (e: unknown) {
+      debugLog('dispose: failed:', errorMessage(e));
+    }
   },
 });
 };
