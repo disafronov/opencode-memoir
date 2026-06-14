@@ -176,7 +176,7 @@ export async function ensureStore(store: string): Promise<void> {
       ensuredStores.add(store);
       if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
     } finally {
-      rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+      rm(tmpDir, { recursive: true, force: true }).catch((e) => debugLog('tmp cleanup failed:', errorMessage(e)));
     }
   })();
   storeCreations.set(store, creationPromise);
