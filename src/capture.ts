@@ -6,6 +6,21 @@ import { errorMessage } from './utils.js';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Test-only override for CLI functions used by flushCapture. When null (production),
+ *  the real implementations from ./store.js are used. */
+export type MemoirCliOverrides = {
+  runMemoir?: (args: string[], options?: { cwd?: string }) => Promise<string>;
+  readMemoirValue?: (store: string, key: string, namespace?: string) => Promise<string>;
+  getCurrentBranch?: (store: string) => Promise<string>;
+};
+
+let _cliOverrides: MemoirCliOverrides | null = null;
+
+/** Set test-only CLI overrides for flushCapture. Pass null to restore defaults. */
+export function setCliOverrides(overrides: MemoirCliOverrides | null): void {
+  _cliOverrides = overrides;
+}
+
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch', 'ApplyPatch', 'MultiFileEdit']);
 
 export interface EditRecord {
@@ -185,7 +200,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
         // the lock serializes per-store CLI access)
         for (const p of perSession) {
           if (p.sessionBranch === 'unknown' || !p.sessionBranch) {
-            p.sessionBranch = await getCurrentBranch(store);
+            p.sessionBranch = await (_cliOverrides?.getCurrentBranch ?? getCurrentBranch)(store);
           }
         }
 
@@ -195,8 +210,8 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
           if (edits.length === 0 && metrics.size === 0) continue;
 
           const [prevCodeRaw, prevTurnRaw] = await Promise.all([
-            edits.length > 0 ? readMemoirValue(store, `metrics.code.${branchKey}`) : Promise.resolve(''),
-            metrics.size > 0 ? readMemoirValue(store, `metrics.turn.${branchKey}`) : Promise.resolve(''),
+            edits.length > 0 ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(store, `metrics.code.${branchKey}`) : Promise.resolve(''),
+            metrics.size > 0 ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(store, `metrics.turn.${branchKey}`) : Promise.resolve(''),
           ]);
 
           let codeWrite: Promise<string> | undefined;
@@ -224,7 +239,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
             }
             acc.entries.push(entry);
             if (acc.entries.length > METRICS_CODE_MAX) acc.entries = acc.entries.slice(-METRICS_CODE_MAX);
-            codeWrite = runMemoir(['-s', store, 'remember', '--replace', JSON.stringify(acc), '-p', `metrics.code.${branchKey}`], { cwd: store });
+            codeWrite = (_cliOverrides?.runMemoir ?? runMemoir)(['-s', store, 'remember', '--replace', JSON.stringify(acc), '-p', `metrics.code.${branchKey}`], { cwd: store });
           }
 
           let turnWrite: Promise<string> | undefined;
@@ -234,7 +249,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
               const prev = existing.get(tool) ?? { calls: 0, errors: 0 };
               existing.set(tool, { calls: prev.calls + current.calls, errors: prev.errors + current.errors });
             }
-            turnWrite = runMemoir(['-s', store, 'remember', '--replace', serializeTurnMetrics(existing), '-p', `metrics.turn.${branchKey}`], { cwd: store });
+            turnWrite = (_cliOverrides?.runMemoir ?? runMemoir)(['-s', store, 'remember', '--replace', serializeTurnMetrics(existing), '-p', `metrics.turn.${branchKey}`], { cwd: store });
           }
 
           // Check writes for this session's pair
