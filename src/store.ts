@@ -17,6 +17,15 @@ export const MEMOIR_PACKAGE = 'memoir-ai';
  */
 export const MEMOIR_AI_PIN = '0.2.2';
 
+/** Timeout (ms) for synchronous git subprocess calls. */
+export const GIT_TIMEOUT_MS = 3_000;
+
+/** Timeout (ms) for async memoir CLI calls. */
+export const MEMOIR_TIMEOUT_MS = 15_000;
+
+/** Max stdout/stderr buffer (bytes) for async memoir CLI calls. */
+export const MEMOIR_MAX_BUFFER = 1_024 * 1_024;
+
 export type SpawnSpec = { command: string; args: string[]; label: string };
 
 /** Max entries in _noGitCache before eviction. */
@@ -38,8 +47,8 @@ export function _main_worktree_root(cwd: string): string {
   if (_noGitCache.has(cwd)) return '';
   try {
     // Fast path: check if --git-dir and --git-common-dir resolve to the same path
-    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd, encoding: 'utf8', timeout: 3000 }).trim();
-    const gitCommonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8', timeout: 3000 }).trim();
+    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
+    const gitCommonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
 
     // Resolve to absolute paths
     const resolvePath = (path: string): string => {
@@ -51,11 +60,11 @@ export function _main_worktree_root(cwd: string): string {
 
     if (gitDirAbs === gitCommonDirAbs) {
       // Main worktree or non-worktree repo
-      return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: 3000 }).trim();
+      return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
     }
 
     // Slow path: parse `git worktree list --porcelain` for the main worktree
-    const worktreeList = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd, encoding: 'utf8', timeout: 3000 });
+    const worktreeList = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
     const firstLine = worktreeList.split('\n')[0];
     if (firstLine.startsWith('worktree ')) {
       const mainWorktree = firstLine.substring('worktree '.length).trim();
@@ -65,7 +74,7 @@ export function _main_worktree_root(cwd: string): string {
     }
 
     // Fallback: try --show-toplevel (bare repo or older git)
-    return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: 3000 }).trim();
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
   } catch (e) {
     debugLog('_main_worktree_root: not a git repo or git error:', errorMessage(e));
     _noGitCache.add(cwd);
@@ -208,8 +217,8 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
       const { stdout } = await execFileAsync(spec.command, spec.args, {
         cwd: options.cwd ?? process.cwd(),
         env: process.env,
-        maxBuffer: 1024 * 1024,
-        timeout: 15_000, // prevent hang if memoir CLI stalls
+        maxBuffer: MEMOIR_MAX_BUFFER,
+        timeout: MEMOIR_TIMEOUT_MS, // prevent hang if memoir CLI stalls
       });
       memoirResolved = spec.label;
       return stdout.trim();
@@ -225,8 +234,8 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
     const { stdout } = await execFileAsync('memoir', args, {
       cwd: options.cwd ?? process.cwd(),
       env: process.env,
-      maxBuffer: 1024 * 1024,
-      timeout: 15_000,
+      maxBuffer: MEMOIR_MAX_BUFFER,
+      timeout: MEMOIR_TIMEOUT_MS,
     });
     return stdout.trim(); // shouldn't get here since all specs failed, but defensive
   } catch (memoirError) {
@@ -263,7 +272,7 @@ export async function getCurrentBranch(store: string): Promise<string> {
  */
 export async function codeGitBranch(): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { encoding: 'utf8', timeout: 3000 });
+    const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
     return stdout.trim();
   } catch (e) {
     debugLog('codeGitBranch: failed:', errorMessage(e));
