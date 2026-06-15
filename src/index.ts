@@ -323,13 +323,13 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
   'command.execute.before': async (input: { command?: string }, output: CommandOutput) => {
     try {
       if (input.command === 'memoir:status') {
-        pushText(output, await statusJson(deriveStorePath()));
+        pushText(output, await statusJson(storeRoot));
       }
       if (input.command === 'memoir:ui') {
-        pushText(output, await launchUi(deriveStorePath()));
+        pushText(output, await launchUi(storeRoot));
       }
       if (input.command === 'memoir:unmerged') {
-        const store = deriveStorePath();
+        const store = storeRoot;
         await ensureStore(store);
         const raw = await runMemoir(['--json', '-s', store, 'branch'], { cwd: store });
         const data = JSON.parse(raw);
@@ -433,7 +433,8 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
       // Snapshot previous branch BEFORE switching — edits from the last turn
       // belong to the OLD branch. (C2 fix: prevents misattribution when the
       // user switches git branch between turns.)
-      const prevBranch = getCachedBranch(sid) === 'unknown' ? undefined : getCachedBranch(sid);
+      const _cachedBranch = getCachedBranch(sid);
+      const prevBranch = _cachedBranch === 'unknown' ? undefined : _cachedBranch;
       setCachedBranch(sid, await autoMatchMemoirBranch(storeRoot));
 
       // Skip capture flush when MEMOIR_NO_CAPTURE is set.

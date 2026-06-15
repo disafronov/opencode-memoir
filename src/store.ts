@@ -215,6 +215,7 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
     if (winner) specs = reorderResolver(specs, winner);
   }
 
+  let lastError = '';
   for (const spec of specs) {
     try {
       const { stdout } = await execFileAsync(spec.command, spec.args, {
@@ -226,26 +227,14 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
       memoirResolved = spec.label;
       return stdout.trim();
     } catch (e) {
-      debugLog('runMemoir: fallback', spec.label, 'failed:', errorMessage(e));
+      lastError = errorMessage(e);
+      debugLog('runMemoir: fallback', spec.label, 'failed:', lastError);
       // Invalidate cache so we don't keep trying a broken resolver on next call
       if (memoirResolved === spec.label) memoirResolved = null;
     }
   }
 
-  // Build a fallback-free attempt at memoir direct for the error message
-  try {
-    const { stdout } = await execFileAsync('memoir', args, {
-      cwd: options.cwd ?? process.cwd(),
-      env: process.env,
-      maxBuffer: MEMOIR_MAX_BUFFER,
-      timeout: MEMOIR_TIMEOUT_MS,
-    });
-    return stdout.trim(); // shouldn't get here since all specs failed, but defensive
-  } catch (memoirError) {
-    const err = memoirError as Error & { stdout?: string; stderr?: string; code?: number };
-    const detail = (err.stderr || err.stdout || err.message).trim();
-    return `Memoir command failed${err.code ? ` (${err.code})` : ''}: ${detail}`;
-  }
+  return `Memoir command failed: ${lastError}`;
 }
 
 export function memoirSpawnSpecs(args: string[]): SpawnSpec[] {
