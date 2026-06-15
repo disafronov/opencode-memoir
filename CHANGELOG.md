@@ -1,3 +1,9 @@
+## [1.1.3](https://github.com/disafronov/opencode-memoir/compare/v1.1.2...v1.1.3) (2026-06-15)
+
+### Bug Fixes
+
+* remove dead CLI retry in runMemoir and use cached storeRoot in command hooks ([399ce39](https://github.com/disafronov/opencode-memoir/commit/399ce39191bd4295dfcee3362fc20ea7b9cb7cff))
+
 ## [1.1.2](https://github.com/disafronov/opencode-memoir/compare/v1.1.1...v1.1.2) (2026-06-14)
 
 ## [1.1.1](https://github.com/disafronov/opencode-memoir/compare/v1.1.0...v1.1.1) (2026-06-14)
