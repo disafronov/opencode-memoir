@@ -40,7 +40,7 @@
     "url": "https://github.com/disafronov/opencode-memoir/issues"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.16.2"
+    "@opencode-ai/plugin": "^1.17.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
