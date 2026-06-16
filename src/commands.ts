@@ -1,5 +1,6 @@
 import { type Config } from '@opencode-ai/plugin';
-import { errorMessage } from './utils.js';
+import { errorMessage, SECRET_PATTERN } from './utils.js';
+import { isSecretSanitizationEnabled } from './recall-gate.js';
 import { statusJson, launchUi, unmergedBranchesText } from './memoir-ops.js';
 
 export type CommandOutput = {
@@ -56,6 +57,12 @@ export async function handleCommandExecuteBefore(storeRoot: string, input: { com
     }
     if (input.command === 'memoir:ui') {
       pushText(output, await launchUi(storeRoot));
+    }
+    if (input.command === 'memoir:remember') {
+      const args = (input as { arguments?: string }).arguments;
+      if (args && isSecretSanitizationEnabled() && SECRET_PATTERN.test(args)) {
+        pushText(output, 'Memoir: cannot remember content that matches secret patterns. Please remove sensitive data and try again.');
+      }
     }
     if (input.command === 'memoir:unmerged') {
       pushText(output, await unmergedBranchesText(storeRoot));
