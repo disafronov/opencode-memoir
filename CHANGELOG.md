@@ -1,3 +1,5 @@
+## [1.1.4](https://github.com/disafronov/opencode-memoir/compare/v1.1.3...v1.1.4) (2026-06-16)
+
 ## [1.1.3](https://github.com/disafronov/opencode-memoir/compare/v1.1.2...v1.1.3) (2026-06-15)
 
 ### Bug Fixes
