@@ -441,7 +441,7 @@ describe('flushCapture', () => {
         },
         runMemoir: async (args: string[]) => {
           callLog.push({ fn: 'runMemoir', args });
-          return 'ok';
+          return { ok: true, stdout: 'ok' };
         },
       });
     });
@@ -606,7 +606,7 @@ describe('flushCapture', () => {
         },
         runMemoir: async (args: string[]) => {
           callLog.push({ fn: 'runMemoir', args });
-          return 'ok';
+          return { ok: true, stdout: 'ok' };
         },
       });
 
@@ -644,7 +644,7 @@ describe('flushCapture', () => {
         },
         runMemoir: async (args: string[]) => {
           callLog.push({ fn: 'runMemoir', args });
-          return 'ok';
+          return { ok: true, stdout: 'ok' };
         },
       });
 
@@ -675,7 +675,7 @@ describe('flushCapture', () => {
         },
         runMemoir: async (args: string[]) => {
           callLog.push({ fn: 'runMemoir', args });
-          return 'ok';
+          return { ok: true, stdout: 'ok' };
         },
       });
 
@@ -713,7 +713,7 @@ describe('flushCapture', () => {
         },
         runMemoir: async (args: string[]) => {
           callLog.push({ fn: 'runMemoir', args });
-          return 'ok';
+          return { ok: true, stdout: 'ok' };
         },
       });
 

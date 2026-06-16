@@ -28,6 +28,10 @@ export const MEMOIR_MAX_BUFFER = 1_024 * 1_024;
 
 export type SpawnSpec = { command: string; args: string[]; label: string };
 
+export type MemoirResult =
+  | { ok: true; stdout: string }
+  | { ok: false; error: string; resolver?: string };
+
 /** Max entries in _noGitCache before eviction. */
 const NO_GIT_CACHE_MAX = 500;
 
@@ -170,8 +174,8 @@ export async function ensureStore(store: string): Promise<void> {
       await mkdir(tmpDir, { recursive: true });
       await execFileAsync('git', ['init', '-q', tmpDir], { timeout: 5000 });
       const result = await runMemoir(['new', store, '--taxonomy-builtin'], { cwd: tmpDir });
-      if (result.startsWith('Memoir command failed')) {
-        throw new Error(result);
+      if (!result.ok) {
+        throw new Error(result.error);
       }
       ensuredStores.add(store);
       if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
@@ -206,7 +210,7 @@ export function reorderResolver<T>(resolver: T[], winner: T): T[] {
 /** Which CLI launcher successfully resolved memoir. Cached to avoid redundant fallback probing. */
 export let memoirResolved: string | null = null;
 
-export async function runMemoir(args: string[], options: { cwd?: string } = {}): Promise<string> {
+export async function runMemoir(args: string[], options: { cwd?: string } = {}): Promise<MemoirResult> {
   let specs = memoirSpawnSpecs(args);
 
   // Put cached resolver first so we skip redundant fallback probing
@@ -216,6 +220,7 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
   }
 
   let lastError = '';
+  let lastResolver: string | undefined;
   for (const spec of specs) {
     try {
       const { stdout } = await execFileAsync(spec.command, spec.args, {
@@ -225,16 +230,17 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
         timeout: MEMOIR_TIMEOUT_MS, // prevent hang if memoir CLI stalls
       });
       memoirResolved = spec.label;
-      return stdout.trim();
+      return { ok: true, stdout: stdout.trim() };
     } catch (e) {
       lastError = errorMessage(e);
+      lastResolver = spec.label;
       debugLog('runMemoir: fallback', spec.label, 'failed:', lastError);
       // Invalidate cache so we don't keep trying a broken resolver on next call
       if (memoirResolved === spec.label) memoirResolved = null;
     }
   }
 
-  return `Memoir command failed: ${lastError}`;
+  return { ok: false, error: `Memoir command failed: ${lastError}`, resolver: lastResolver };
 }
 
 export function memoirSpawnSpecs(args: string[]): SpawnSpec[] {
@@ -249,8 +255,9 @@ export function memoirSpawnSpecs(args: string[]): SpawnSpec[] {
 export async function getCurrentBranch(store: string): Promise<string> {
   try {
     const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
-    const raw = await runFn(['--json', '-s', store, 'status'], { cwd: store });
-    const data = JSON.parse(raw);
+    const result = await runFn(['--json', '-s', store, 'status'], { cwd: store });
+    if (!result.ok) return 'unknown';
+    const data = JSON.parse(result.stdout);
     return data.branch || 'unknown';
   } catch (e) {
     debugLog('getCurrentBranch: failed:', errorMessage(e));
@@ -282,8 +289,9 @@ export async function branchExistsInMemoir(store: string, name: string): Promise
   if (!name) return false;
   try {
     const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
-    const raw = await runFn(['--json', '-s', store, 'branch'], { cwd: store });
-    const data = JSON.parse(raw);
+    const result = await runFn(['--json', '-s', store, 'branch'], { cwd: store });
+    if (!result.ok) return false;
+    const data = JSON.parse(result.stdout);
     const branches: string[] = data?.branches ?? [];
     return branches.includes(name);
   } catch (e) {
@@ -311,15 +319,15 @@ export async function autoMatchMemoirBranch(store: string): Promise<string> {
   // Create the branch from main if it doesn't exist yet
   if (!(await branchExistsInMemoir(store, codeBranch))) {
     const result = await runFn(['-s', store, 'branch', codeBranch, '--from', 'main'], { cwd: store });
-    if (result.startsWith('Memoir command failed')) {
-      debugLog('autoMatchMemoirBranch: create branch failed:', result);
+    if (!result.ok) {
+      debugLog('autoMatchMemoirBranch: create branch failed:', result.error);
       return getCurrentBranch(store);
     }
   }
   // Checkout the branch
   const result = await runFn(['-s', store, 'checkout', codeBranch], { cwd: store });
-  if (result.startsWith('Memoir command failed')) {
-    debugLog('autoMatchMemoirBranch: checkout failed:', result);
+  if (!result.ok) {
+    debugLog('autoMatchMemoirBranch: checkout failed:', result.error);
     return getCurrentBranch(store);
   }
   return codeBranch;
@@ -332,8 +340,9 @@ export async function autoMatchMemoirBranch(store: string): Promise<string> {
 export async function readMemoirValue(store: string, key: string, namespace: string = 'default'): Promise<string> {
   try {
     const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
-    const raw = await runFn(['--json', '-s', store, 'get', key, '-n', namespace], { cwd: store });
-    const parsed = JSON.parse(raw);
+    const result = await runFn(['--json', '-s', store, 'get', key, '-n', namespace], { cwd: store });
+    if (!result.ok) return '';
+    const parsed = JSON.parse(result.stdout);
     const items = parsed?.items ?? [];
     const value = items[0]?.value?.content;
     return typeof value === 'string' ? value : '';
@@ -345,7 +354,7 @@ export async function readMemoirValue(store: string, key: string, namespace: str
 
 // --- Test seams (only for unit tests) ---
 type StoreTestOverrides = {
-  runMemoirFn?: (args: string[], options: { cwd?: string }) => Promise<string>;
+  runMemoirFn?: (args: string[], options: { cwd?: string }) => Promise<MemoirResult>;
   execFileAsyncFn?: (command: string, args: string[], options?: Record<string, unknown>) => Promise<{ stdout: string }>;
 };
 let _storeTestOverrides: StoreTestOverrides = {};

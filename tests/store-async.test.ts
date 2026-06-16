@@ -12,7 +12,7 @@ describe('getCurrentBranch', () => {
 
   it('returns branch name from memoir status', async () => {
     setStoreTestOverrides({
-      runMemoirFn: async () => '{"branch":"main"}',
+      runMemoirFn: async () => ({ ok: true, stdout: '{"branch":"main"}' }),
     });
     const result = await getCurrentBranch(TEST_STORE);
     assert.strictEqual(result, 'main');
@@ -20,7 +20,7 @@ describe('getCurrentBranch', () => {
 
   it('returns unknown when branch missing from status', async () => {
     setStoreTestOverrides({
-      runMemoirFn: async () => '{}',
+      runMemoirFn: async () => ({ ok: true, stdout: '{}' }),
     });
     const result = await getCurrentBranch(TEST_STORE);
     assert.strictEqual(result, 'unknown');
@@ -72,7 +72,7 @@ describe('branchExistsInMemoir', () => {
 
   it('returns true when branch exists', async () => {
     setStoreTestOverrides({
-      runMemoirFn: async () => '{"branches":["main","dev"]}',
+      runMemoirFn: async () => ({ ok: true, stdout: '{"branches":["main","dev"]}' }),
     });
     const result = await branchExistsInMemoir(TEST_STORE, 'dev');
     assert.strictEqual(result, true);
@@ -80,7 +80,7 @@ describe('branchExistsInMemoir', () => {
 
   it('returns false when branch not found', async () => {
     setStoreTestOverrides({
-      runMemoirFn: async () => '{"branches":["main"]}',
+      runMemoirFn: async () => ({ ok: true, stdout: '{"branches":["main"]}' }),
     });
     const result = await branchExistsInMemoir(TEST_STORE, 'dev');
     assert.strictEqual(result, false);
@@ -115,8 +115,8 @@ describe('autoMatchMemoirBranch', () => {
       execFileAsyncFn: async () => ({ stdout: 'main\n' }),
       runMemoirFn: async (args) => {
         const joined = args.join(' ');
-        if (joined.includes('status')) return '{"branch":"main"}';
-        return '';
+        if (joined.includes('status')) return { ok: true, stdout: '{"branch":"main"}' };
+        return { ok: true, stdout: '' };
       },
     });
     const result = await autoMatchMemoirBranch(TEST_STORE);
@@ -132,11 +132,11 @@ describe('autoMatchMemoirBranch', () => {
       runMemoirFn: async (args) => {
         calls.push(args);
         const joined = args.join(' ');
-        if (joined.includes('status')) return '{"branch":"main"}';
-        if (joined.includes('branch') && joined.includes('--json')) return '{"branches":["main"]}';
-        if (joined.includes('branch') && joined.includes('--from')) return 'ok';
-        if (joined.includes('checkout')) return 'ok';
-        return '';
+        if (joined.includes('status')) return { ok: true, stdout: '{"branch":"main"}' };
+        if (joined.includes('branch') && joined.includes('--json')) return { ok: true, stdout: '{"branches":["main"]}' };
+        if (joined.includes('branch') && joined.includes('--from')) return { ok: true, stdout: 'ok' };
+        if (joined.includes('checkout')) return { ok: true, stdout: 'ok' };
+        return { ok: true, stdout: '' };
       },
     });
     const result = await autoMatchMemoirBranch(TEST_STORE);
@@ -158,10 +158,10 @@ describe('autoMatchMemoirBranch', () => {
       runMemoirFn: async (args) => {
         calls.push(args);
         const joined = args.join(' ');
-        if (joined.includes('status')) return '{"branch":"main"}';
-        if (joined.includes('branch') && joined.includes('--json')) return '{"branches":["main","dev"]}';
-        if (joined.includes('checkout')) return 'ok';
-        return '';
+        if (joined.includes('status')) return { ok: true, stdout: '{"branch":"main"}' };
+        if (joined.includes('branch') && joined.includes('--json')) return { ok: true, stdout: '{"branches":["main","dev"]}' };
+        if (joined.includes('checkout')) return { ok: true, stdout: 'ok' };
+        return { ok: true, stdout: '' };
       },
     });
     const result = await autoMatchMemoirBranch(TEST_STORE);
@@ -181,7 +181,7 @@ describe('autoMatchMemoirBranch', () => {
       execFileAsyncFn: async () => ({ stdout: '\n' }),
       runMemoirFn: async (args) => {
         const joined = args.join(' ');
-        if (joined.includes('status')) return '{"branch":"main"}';
+        if (joined.includes('status')) return { ok: true, stdout: '{"branch":"main"}' };
         throw new Error('should not be called');
       },
     });
@@ -196,10 +196,10 @@ describe('autoMatchMemoirBranch', () => {
       execFileAsyncFn: async () => ({ stdout: 'dev\n' }),
       runMemoirFn: async (args) => {
         const joined = args.join(' ');
-        if (joined.includes('status')) return '{"branch":"main"}';
-        if (joined.includes('branch') && joined.includes('--json')) return '{"branches":["main","dev"]}';
-        if (joined.includes('checkout')) return 'Memoir command failed: checkout fail';
-        return '';
+        if (joined.includes('status')) return { ok: true, stdout: '{"branch":"main"}' };
+        if (joined.includes('branch') && joined.includes('--json')) return { ok: true, stdout: '{"branches":["main","dev"]}' };
+        if (joined.includes('checkout')) return { ok: false, error: 'Memoir command failed: checkout fail' };
+        return { ok: true, stdout: '' };
       },
     });
     const result = await autoMatchMemoirBranch(TEST_STORE);
@@ -214,7 +214,7 @@ describe('readMemoirValue', () => {
 
   it('returns content of first item', async () => {
     setStoreTestOverrides({
-      runMemoirFn: async () => '{"items":[{"value":{"content":"hello"}}]}',
+      runMemoirFn: async () => ({ ok: true, stdout: '{"items":[{"value":{"content":"hello"}}]}' }),
     });
     const result = await readMemoirValue(TEST_STORE, 'some.key');
     assert.strictEqual(result, 'hello');
@@ -222,7 +222,7 @@ describe('readMemoirValue', () => {
 
   it('returns empty string when items array is empty', async () => {
     setStoreTestOverrides({
-      runMemoirFn: async () => '{"items":[]}',
+      runMemoirFn: async () => ({ ok: true, stdout: '{"items":[]}' }),
     });
     const result = await readMemoirValue(TEST_STORE, 'some.key');
     assert.strictEqual(result, '');
@@ -233,7 +233,7 @@ describe('readMemoirValue', () => {
     setStoreTestOverrides({
       runMemoirFn: async (args) => {
         capturedArgs = args;
-        return '{"items":[{"value":{"content":"val"}}]}';
+        return { ok: true, stdout: '{"items":[{"value":{"content":"val"}}]}' };
       },
     });
     await readMemoirValue(TEST_STORE, 'some.key');
