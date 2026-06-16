@@ -73,7 +73,11 @@ export async function launchUi(store: string): Promise<string> {
     const child = spawn(spec.command, spec.args, {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      // Scrub process.env — only forward whitelisted vars to avoid leaking secrets
+      env: Object.fromEntries(
+        Object.entries({ PATH: process.env.PATH, MEMOIR_STORE: process.env.MEMOIR_STORE, MEMOIR_DEBUG: process.env.MEMOIR_DEBUG })
+          .filter(([, v]) => v != null)
+      ) as Record<string, string>,
     });
 
     let output = '';
