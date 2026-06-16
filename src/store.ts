@@ -35,11 +35,45 @@ export type MemoirResult =
 /** Max entries in _noGitCache before eviction. */
 const NO_GIT_CACHE_MAX = 500;
 
+/** TTL for non-git cache entries (5 minutes). */
+const NO_GIT_CACHE_TTL = 5 * 60 * 1_000;
+
+/** Evict the oldest entry (first inserted) from the noGitCache. */
+function evictOldestNoGit(): void {
+  const firstKey = _noGitCache.keys().next().value;
+  if (firstKey !== undefined) _noGitCache.delete(firstKey);
+}
+
+/** Sweep expired entries from noGitCache. */
+function sweepNoGitCache(): void {
+  const now = Date.now();
+  for (const [key, ts] of _noGitCache) {
+    if (now - ts >= NO_GIT_CACHE_TTL) _noGitCache.delete(key);
+  }
+}
+
 /**
- * Cache of cwds confirmed to be outside a git repo.
- * Avoids redundant ~200ms failing `git rev-parse` calls on non-git directories.
+ * Cache of cwds confirmed to be outside a git repo, keyed by path with
+ * timestamp of when the entry was added.
+ * Avoids redundant ~200ms failing `git rev-parse` calls on non-git directories,
+ * while still allowing a directory that becomes a git repo (e.g. `git init`)
+ * to be retried after the TTL expires.
  */
-export const _noGitCache = new Set<string>();
+export const _noGitCache = new Map<string, number>();
+
+/**
+ * Check whether a cwd is cached as non-git and still within TTL.
+ * If the entry exists but is expired, it is removed from the cache.
+ */
+export function _checkNoGit(cwd: string): boolean {
+  const ts = _noGitCache.get(cwd);
+  if (ts === undefined) return false;
+  const age = Date.now() - ts;
+  if (age < NO_GIT_CACHE_TTL) return true;
+  // Expired — remove so the directory can be re-checked
+  _noGitCache.delete(cwd);
+  return false;
+}
 
 /**
  * Resolve the main worktree root path for a git repository.
@@ -48,7 +82,7 @@ export const _noGitCache = new Set<string>();
  * @returns The main worktree path, or empty string if not in a git repo.
  */
 export function _main_worktree_root(cwd: string): string {
-  if (_noGitCache.has(cwd)) return '';
+  if (_checkNoGit(cwd)) return '';
   try {
     // Fast path: check if --git-dir and --git-common-dir resolve to the same path
     const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
@@ -81,8 +115,9 @@ export function _main_worktree_root(cwd: string): string {
     return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
   } catch (e) {
     debugLog('_main_worktree_root: not a git repo or git error:', errorMessage(e));
-    _noGitCache.add(cwd);
-    if (_noGitCache.size > NO_GIT_CACHE_MAX) _noGitCache.clear();
+    sweepNoGitCache();
+    _noGitCache.set(cwd, Date.now());
+    if (_noGitCache.size > NO_GIT_CACHE_MAX) evictOldestNoGit();
     return '';
   }
 }
