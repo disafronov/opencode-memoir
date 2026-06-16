@@ -1,3 +1,13 @@
+## [1.1.5](https://github.com/disafronov/opencode-memoir/compare/v1.1.4...v1.1.5) (2026-06-16)
+
+### Bug Fixes
+
+* add retry limit for taxonomy fetch ([c7bdf23](https://github.com/disafronov/opencode-memoir/commit/c7bdf233cef75099afd51056cc392be6032f94c1))
+* add TTL expiration to noGitCache ([bdea287](https://github.com/disafronov/opencode-memoir/commit/bdea287095b3ba02321eea02f7589832181ab2df))
+* log errors in dispose hook instead of swallowing ([5469f4e](https://github.com/disafronov/opencode-memoir/commit/5469f4eab2dc7826122c2e13f131f1a4a2e71b51))
+* **security:** sanitize secrets in memoir:remember command ([9f124ff](https://github.com/disafronov/opencode-memoir/commit/9f124ff1636dde59b4cdcea5fd71051ddbe63abf))
+* **security:** scrub process.env for spawned child process ([bf90935](https://github.com/disafronov/opencode-memoir/commit/bf90935effeab054f5edb92af160a53e97686c11))
+
 ## [1.1.4](https://github.com/disafronov/opencode-memoir/compare/v1.1.3...v1.1.4) (2026-06-16)
 
 ## [1.1.3](https://github.com/disafronov/opencode-memoir/compare/v1.1.2...v1.1.3) (2026-06-15)
