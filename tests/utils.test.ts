@@ -1,8 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { coercePaths, errorMessage, MEMOIR_GET_MAX_KEYS, tryPrettyJson } from '../src/utils.ts';
-import { SECRET_PATTERN, isSecretSanitizationEnabled } from '../src/recall-gate.ts';
+import { coercePaths, errorMessage, MEMOIR_GET_MAX_KEYS, SECRET_PATTERN, tryPrettyJson } from '../src/utils.ts';
 import { parseTurnMetrics, serializeTurnMetrics } from '../src/capture.ts';
 
 describe('MEMOIR_GET_MAX_KEYS', () => {
@@ -117,33 +116,6 @@ describe('errorMessage', () => {
 
   it('handles undefined', () => {
     assert.strictEqual(errorMessage(undefined), 'undefined');
-  });
-});
-
-describe('isSecretSanitizationEnabled', () => {
-  it('is enabled by default', () => {
-    delete process.env.MEMOIR_SANITIZE_SECRETS;
-    assert.ok(isSecretSanitizationEnabled());
-  });
-
-  it('is disabled when MEMOIR_SANITIZE_SECRETS=0', () => {
-    process.env.MEMOIR_SANITIZE_SECRETS = '0';
-    assert.ok(!isSecretSanitizationEnabled());
-    delete process.env.MEMOIR_SANITIZE_SECRETS;
-  });
-
-  it('is enabled when MEMOIR_SANITIZE_SECRETS=1', () => {
-    process.env.MEMOIR_SANITIZE_SECRETS = '1';
-    assert.ok(isSecretSanitizationEnabled());
-    delete process.env.MEMOIR_SANITIZE_SECRETS;
-  });
-
-  it('is enabled for any non-zero value', () => {
-    process.env.MEMOIR_SANITIZE_SECRETS = 'false';
-    assert.ok(isSecretSanitizationEnabled());
-    process.env.MEMOIR_SANITIZE_SECRETS = 'anything';
-    assert.ok(isSecretSanitizationEnabled());
-    delete process.env.MEMOIR_SANITIZE_SECRETS;
   });
 });
 

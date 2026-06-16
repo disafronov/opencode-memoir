@@ -1,6 +1,9 @@
-export { SECRET_PATTERN } from './utils.js';
-
-/** Whether secret sanitization is enabled. Default on. Set MEMOIR_SANITIZE_SECRETS=0 to disable. */
+/**
+ * Whether secret sanitization is enabled. Default on. Set MEMOIR_SANITIZE_SECRETS=0 to disable.
+ *
+ * NOTE: Do not re-export SECRET_PATTERN from this module — callers should import
+ * it directly from utils.ts to keep the dependency chain flat.
+ */
 export function isSecretSanitizationEnabled(): boolean {
   return process.env.MEMOIR_SANITIZE_SECRETS !== '0';
 }
