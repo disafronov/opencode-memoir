@@ -14,7 +14,7 @@ import { ensureStore, runMemoir, ensuredStores, memoirSpawnSpecs } from '../src/
  */
 async function memoirAvailable(): Promise<boolean> {
   const result = await runMemoir(['--help']);
-  return !result.startsWith('Memoir command failed');
+  return result.ok;
 }
 
 const hasMemoir = await memoirAvailable();
@@ -50,8 +50,9 @@ describe('integration: ensureStore + memoir status (real CLI)', { skip: !hasMemo
 
     // And memoir must be able to report status against it.
     const status = await runMemoir(['--json', '-s', store, 'status'], { cwd: store });
-    assert.ok(!status.startsWith('Memoir command failed'), `status should succeed, got: ${status}`);
-    const data = JSON.parse(status);
+    assert.ok(status.ok, `status should succeed, got: ${!status.ok ? status.error : status.stdout}`);
+    if (!status.ok) return;
+    const data = JSON.parse(status.stdout);
     assert.ok(data.branch, 'status JSON should report a branch');
   });
 });

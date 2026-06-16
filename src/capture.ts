@@ -1,4 +1,4 @@
-import { deriveStorePath, ensureStore, getCurrentBranch, readMemoirValue, runMemoir } from './store.js';
+import { type MemoirResult, deriveStorePath, ensureStore, getCurrentBranch, readMemoirValue, runMemoir } from './store.js';
 import { debugLog } from './debug.js';
 import { errorMessage } from './utils.js';
 
@@ -9,7 +9,7 @@ import { errorMessage } from './utils.js';
 /** Test-only override for CLI functions used by flushCapture. When null (production),
  *  the real implementations from ./store.js are used. */
 export type MemoirCliOverrides = {
-  runMemoir?: (args: string[], options?: { cwd?: string }) => Promise<string>;
+  runMemoir?: (args: string[], options?: { cwd?: string }) => Promise<MemoirResult>;
   readMemoirValue?: (store: string, key: string, namespace?: string) => Promise<string>;
   getCurrentBranch?: (store: string) => Promise<string>;
 };
@@ -214,7 +214,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
             metrics.size > 0 ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(store, `metrics.turn.${branchKey}`) : Promise.resolve(''),
           ]);
 
-          let codeWrite: Promise<string> | undefined;
+          let codeWrite: Promise<MemoirResult> | undefined;
           if (edits.length > 0) {
             const files = [...new Set(edits.map(e => e.filePath))];
             const entry = {
@@ -242,7 +242,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
             codeWrite = (_cliOverrides?.runMemoir ?? runMemoir)(['-s', store, 'remember', '--replace', JSON.stringify(acc), '-p', `metrics.code.${branchKey}`], { cwd: store });
           }
 
-          let turnWrite: Promise<string> | undefined;
+          let turnWrite: Promise<MemoirResult> | undefined;
           if (metrics.size > 0) {
             const existing = parseTurnMetrics(prevTurnRaw);
             for (const [tool, current] of metrics) {
@@ -253,10 +253,13 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
           }
 
           // Check writes for this session's pair
-          const results = await Promise.all([codeWrite, turnWrite].filter(Boolean));
+          const writes: Promise<MemoirResult>[] = [];
+          if (codeWrite) writes.push(codeWrite);
+          if (turnWrite) writes.push(turnWrite);
+          const results = await Promise.all(writes);
           for (const result of results) {
-            if (typeof result === 'string' && result.startsWith('Memoir command failed')) {
-              throw new Error(`Memoir write failed: ${result}`);
+            if (!result.ok) {
+              throw new Error(`Memoir write failed: ${result.error}`);
             }
           }
         }
