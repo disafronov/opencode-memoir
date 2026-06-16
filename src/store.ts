@@ -248,7 +248,8 @@ export function memoirSpawnSpecs(args: string[]): SpawnSpec[] {
 /** Read the current memoir branch name for use in storage keys. */
 export async function getCurrentBranch(store: string): Promise<string> {
   try {
-    const raw = await runMemoir(['--json', '-s', store, 'status'], { cwd: store });
+    const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
+    const raw = await runFn(['--json', '-s', store, 'status'], { cwd: store });
     const data = JSON.parse(raw);
     return data.branch || 'unknown';
   } catch (e) {
@@ -264,7 +265,8 @@ export async function getCurrentBranch(store: string): Promise<string> {
  */
 export async function codeGitBranch(): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
+    const execFn = _storeTestOverrides.execFileAsyncFn ?? execFileAsync;
+    const { stdout } = await execFn('git', ['branch', '--show-current'], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
     return stdout.trim();
   } catch (e) {
     debugLog('codeGitBranch: failed:', errorMessage(e));
@@ -279,7 +281,8 @@ export async function codeGitBranch(): Promise<string> {
 export async function branchExistsInMemoir(store: string, name: string): Promise<boolean> {
   if (!name) return false;
   try {
-    const raw = await runMemoir(['--json', '-s', store, 'branch'], { cwd: store });
+    const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
+    const raw = await runFn(['--json', '-s', store, 'branch'], { cwd: store });
     const data = JSON.parse(raw);
     const branches: string[] = data?.branches ?? [];
     return branches.includes(name);
@@ -296,6 +299,7 @@ export async function branchExistsInMemoir(store: string, name: string): Promise
  * Mirrors auto_match_memoir_branch from plugins/claude-code/hooks/common.sh.
  */
 export async function autoMatchMemoirBranch(store: string): Promise<string> {
+  const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
   const codeBranch = await codeGitBranch();
   if (!codeBranch) {
     return getCurrentBranch(store); // detached or non-git — just report current
@@ -306,14 +310,14 @@ export async function autoMatchMemoirBranch(store: string): Promise<string> {
 
   // Create the branch from main if it doesn't exist yet
   if (!(await branchExistsInMemoir(store, codeBranch))) {
-    const result = await runMemoir(['-s', store, 'branch', codeBranch, '--from', 'main'], { cwd: store });
+    const result = await runFn(['-s', store, 'branch', codeBranch, '--from', 'main'], { cwd: store });
     if (result.startsWith('Memoir command failed')) {
       debugLog('autoMatchMemoirBranch: create branch failed:', result);
       return getCurrentBranch(store);
     }
   }
   // Checkout the branch
-  const result = await runMemoir(['-s', store, 'checkout', codeBranch], { cwd: store });
+  const result = await runFn(['-s', store, 'checkout', codeBranch], { cwd: store });
   if (result.startsWith('Memoir command failed')) {
     debugLog('autoMatchMemoirBranch: checkout failed:', result);
     return getCurrentBranch(store);
@@ -327,7 +331,8 @@ export async function autoMatchMemoirBranch(store: string): Promise<string> {
  */
 export async function readMemoirValue(store: string, key: string, namespace: string = 'default'): Promise<string> {
   try {
-    const raw = await runMemoir(['--json', '-s', store, 'get', key, '-n', namespace], { cwd: store });
+    const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
+    const raw = await runFn(['--json', '-s', store, 'get', key, '-n', namespace], { cwd: store });
     const parsed = JSON.parse(raw);
     const items = parsed?.items ?? [];
     const value = items[0]?.value?.content;
@@ -336,4 +341,14 @@ export async function readMemoirValue(store: string, key: string, namespace: str
     debugLog('readMemoirValue: failed:', errorMessage(e));
     return '';
   }
+}
+
+// --- Test seams (only for unit tests) ---
+type StoreTestOverrides = {
+  runMemoirFn?: (args: string[], options: { cwd?: string }) => Promise<string>;
+  execFileAsyncFn?: (command: string, args: string[], options?: Record<string, unknown>) => Promise<{ stdout: string }>;
+};
+let _storeTestOverrides: StoreTestOverrides = {};
+export function setStoreTestOverrides(overrides: StoreTestOverrides): void {
+  _storeTestOverrides = overrides;
 }
