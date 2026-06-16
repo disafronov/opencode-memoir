@@ -4,6 +4,8 @@ import { memoirTools } from './tools.js';
 import { registerCommands, handleCommandExecuteBefore } from './commands.js';
 import { handleShellEnv, handleToolExecuteAfter, handleChatMessage, flushAllCapture } from './capture-hooks.js';
 import { handleEvent, handleSystemTransform, clearSessionContext } from './session-context.js';
+import { debugLog } from './debug.js';
+import { errorMessage } from './utils.js';
 
 const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
   const opts = (rawOptions ?? {}) as { store?: string };
@@ -87,7 +89,9 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
       await flushAllCapture(storeRoot);
       clearSessionContext();
     } catch (e: unknown) {
-      // Errors are already logged inside flushAllCapture
+      const msg = `memoir: dispose error: ${errorMessage(e)}`;
+      debugLog(msg);
+      console.error(msg);
     }
   },
 });
