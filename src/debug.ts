@@ -3,7 +3,7 @@
  * Only writes when MEMOIR_DEBUG=1 is set.
  */
 export function debugLog(...args: unknown[]): void {
-  if (process.env.MEMOIR_DEBUG !== '1') return;
+  if (process.env.MEMOIR_DEBUG !== "1") return;
   const ts = new Date().toISOString();
-  process.stderr.write(`[memoir ${ts}] ${args.map(a => String(a)).join(' ')}\n`);
+  process.stderr.write(`[memoir ${ts}] ${args.map((a) => String(a)).join(" ")}\n`);
 }

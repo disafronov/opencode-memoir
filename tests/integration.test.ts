@@ -1,10 +1,10 @@
-import { describe, it, after } from 'node:test';
-import assert from 'node:assert/strict';
-import { mkdtemp, rm, access } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import assert from "node:assert/strict";
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, describe, it } from "node:test";
 
-import { ensureStore, runMemoir, ensuredStores, memoirSpawnSpecs } from '../src/store.ts';
+import { ensuredStores, ensureStore, runMemoir } from "../src/store.ts";
 
 /**
  * Probe whether a working `memoir` CLI is reachable via any spawn spec.
@@ -13,7 +13,7 @@ import { ensureStore, runMemoir, ensuredStores, memoirSpawnSpecs } from '../src/
  * (most CI) where the binary isn't installed.
  */
 async function memoirAvailable(): Promise<boolean> {
-  const result = await runMemoir(['--help']);
+  const result = await runMemoir(["--help"]);
   return result.ok;
 }
 
@@ -23,7 +23,9 @@ const hasMemoir = await memoirAvailable();
 // can actually bootstrap a working store from an empty, NON-git directory
 // (the bug that motivated the scratch-git-dir fix). Everything else is
 // covered by unit/hook tests; real-CLI coverage here is deliberately minimal.
-describe('integration: ensureStore + memoir status (real CLI)', { skip: !hasMemoir ? 'memoir CLI not available' : false }, () => {
+describe("integration: ensureStore + memoir status (real CLI)", {
+  skip: !hasMemoir ? "memoir CLI not available" : false,
+}, () => {
   let workDir: string;
   let store: string;
 
@@ -37,22 +39,25 @@ describe('integration: ensureStore + memoir status (real CLI)', { skip: !hasMemo
     }
   });
 
-  it('creates a working store in an empty non-git directory', async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'memoir-it-work-'));
-    store = join(workDir, 'store');
+  it("creates a working store in an empty non-git directory", async () => {
+    workDir = await mkdtemp(join(tmpdir(), "memoir-it-work-"));
+    store = join(workDir, "store");
 
     // workDir is a fresh tmp dir with no .git — this is the scenario that
     // crashed `memoir new` before the scratch-git-dir workaround.
     await ensureStore(store);
 
     // Store directory must now be a real prolly-tree git repo.
-    await assert.doesNotReject(access(join(store, '.git')), '.git should exist in the new store');
+    await assert.doesNotReject(access(join(store, ".git")), ".git should exist in the new store");
 
     // And memoir must be able to report status against it.
-    const status = await runMemoir(['--json', '-s', store, 'status'], { cwd: store });
-    assert.ok(status.ok, `status should succeed, got: ${!status.ok ? status.error : status.stdout}`);
+    const status = await runMemoir(["--json", "-s", store, "status"], { cwd: store });
+    assert.ok(
+      status.ok,
+      `status should succeed, got: ${!status.ok ? status.error : status.stdout}`,
+    );
     if (!status.ok) return;
     const data = JSON.parse(status.stdout);
-    assert.ok(data.branch, 'status JSON should report a branch');
+    assert.ok(data.branch, "status JSON should report a branch");
   });
 });

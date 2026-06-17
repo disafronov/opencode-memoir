@@ -12,14 +12,19 @@ npm run build          # tsc declarations + esbuild bundle to dist/
 npm run typecheck      # tsc --noEmit (strict mode)
 npm test              # tsx --test tests/*.test.ts (Node built-in test runner)
 
+# Linting & formatting
+npm run lint           # biome check src/ tests/
+npm run lint:fix       # biome check --write src/ tests/
+npm run format         # biome format --write src/ tests/
+
 # Single test file
 npx tsx --test tests/recall-gate.test.ts
 
 # Full verification (what CI runs)
-npm run build && npm test
+npm run lint && npm run build && npm test
 ```
 
-**No linter or formatter.** TypeScript strict mode is the only static analysis.
+**Biome** is the linter and formatter (`@biomejs/biome`). CI runs `biome ci src/ tests/` which is stricter than `biome check`.
 
 ## Architecture Essentials
 
@@ -98,6 +103,6 @@ Two-stage build:
 
 ## CI/CD
 
-- PRs: `lint_and_test.yaml` (Node 20/22 matrix)
+- PRs: `lint_and_test.yaml` (Biome lint → Node 20/22 test matrix)
 - Main/release pushes: `semantic.yaml` (semantic-release)
 - Version tags: `publish-npm.yaml` (npm trusted publishing)

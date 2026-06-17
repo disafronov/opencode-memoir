@@ -1,7 +1,7 @@
-import { runMemoir } from './store.js';
-import { pendingRecall } from './recall-gate.js';
-import { errorMessage, tryPrettyJson } from './utils.js';
-import { debugLog } from './debug.js';
+import { debugLog } from "./debug.js";
+import { pendingRecall } from "./recall-gate.js";
+import { runMemoir } from "./store.js";
+import { errorMessage, tryPrettyJson } from "./utils.js";
 
 /** Cached session init context (taxonomy overview). Fetched once, injected per-session. */
 let initContext: string | null = null;
@@ -40,14 +40,17 @@ function pruneStaleSessions(): void {
   }
 }
 
-export async function handleEvent(storeRoot: string, input: { event: { type: string } }): Promise<void> {
-  if (input.event.type === 'session.created' && !initContextFetched) {
+export async function handleEvent(
+  storeRoot: string,
+  input: { event: { type: string } },
+): Promise<void> {
+  if (input.event.type === "session.created" && !initContextFetched) {
     initContextFetched = true;
     fetchTaxonomy(storeRoot).catch((e: unknown) => {
-      debugLog('event: taxonomy fetch failed, will retry on next session:', errorMessage(e));
+      debugLog("event: taxonomy fetch failed, will retry on next session:", errorMessage(e));
       taxonomyFetchRetries++;
       if (taxonomyFetchRetries >= MAX_TAXONOMY_RETRIES) {
-        debugLog('memoir: taxonomy fetch failed after max retries, giving up');
+        debugLog("memoir: taxonomy fetch failed after max retries, giving up");
         return;
       }
       // Allow a later session to retry — the store may not have been ready yet.
@@ -58,8 +61,8 @@ export async function handleEvent(storeRoot: string, input: { event: { type: str
 
 async function fetchTaxonomy(storeRoot: string): Promise<void> {
   const taxonomyResult = await runMemoir(
-    ['--json', '-s', storeRoot, 'summarize', '--depth', '3', '-n', 'default'],
-    { cwd: storeRoot }
+    ["--json", "-s", storeRoot, "summarize", "--depth", "3", "-n", "default"],
+    { cwd: storeRoot },
   );
   if (!taxonomyResult.ok) {
     throw new Error(taxonomyResult.error);
@@ -86,11 +89,11 @@ export async function handleSystemTransform(input: unknown, output: unknown): Pr
     if (typedInput?.sessionID && pendingRecall.has(typedInput.sessionID)) {
       pendingRecall.delete(typedInput.sessionID);
       typedOutput?.system?.push(
-        '\n[memoir] The user may have relevant context in Memoir. Run memoir_recall to list available memories across default and onboard namespaces, then memoir_get with the matching namespace to fetch exact values.'
+        "\n[memoir] The user may have relevant context in Memoir. Run memoir_recall to list available memories across default and onboard namespaces, then memoir_get with the matching namespace to fetch exact values.",
       );
     }
   } catch (e) {
-    debugLog('system.transform: failed:', errorMessage(e));
+    debugLog("system.transform: failed:", errorMessage(e));
   }
 }
 

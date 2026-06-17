@@ -5,7 +5,7 @@
  * it directly from utils.ts to keep the dependency chain flat.
  */
 export function isSecretSanitizationEnabled(): boolean {
-  return process.env.MEMOIR_SANITIZE_SECRETS !== '0';
+  return process.env.MEMOIR_SANITIZE_SECRETS !== "0";
 }
 
 /**
@@ -15,10 +15,12 @@ export function isSecretSanitizationEnabled(): boolean {
 export const pendingRecall = new Set<string>();
 
 /** Short acknowledgements that never trigger recall. */
-const ACK_PATTERN = /^(ok|thanks|thank you|sounds good|got it|👍|🙏|perfect|great|cool|nice|awesome|understood|makes sense|agree|right|sure|yes|no|done|nvm|never mind|lgtm|looks good|proceed|continue|good|fine)\b/i;
+const ACK_PATTERN =
+  /^(ok|thanks|thank you|sounds good|got it|👍|🙏|perfect|great|cool|nice|awesome|understood|makes sense|agree|right|sure|yes|no|done|nvm|never mind|lgtm|looks good|proceed|continue|good|fine)\b/i;
 
 /** Explicit memoir commands always trigger recall regardless of length. */
-const EXPLICIT_RECALL_PATTERN = /\b(memoir:recall|memoir:remember|memoir-recall|memoir-remember)\b|(\/recall|\/remember)\b/i;
+const EXPLICIT_RECALL_PATTERN =
+  /\b(memoir:recall|memoir:remember|memoir-recall|memoir-remember)\b|(\/recall|\/remember)\b/i;
 
 /** Positive-list patterns — identical to the Claude Code UserPromptSubmit gate. */
 const RECALL_TRIGGER_PATTERNS = [
@@ -63,8 +65,8 @@ export function shouldTriggerRecall(text: string): boolean {
   if (trimmed.length < 10) return false;
   if (isAcknowledgement(trimmed)) return false;
   // Gate: ≥ 40 chars + any trigger
-  if (trimmed.length >= 40 && RECALL_TRIGGER_PATTERNS.some(p => p.test(trimmed))) return true;
+  if (trimmed.length >= 40 && RECALL_TRIGGER_PATTERNS.some((p) => p.test(trimmed))) return true;
   return false;
 }
 
-export const DEFAULT_RECALL_NAMESPACES = ['default', 'project:onboard', 'codebase:onboard'];
+export const DEFAULT_RECALL_NAMESPACES = ["default", "project:onboard", "codebase:onboard"];

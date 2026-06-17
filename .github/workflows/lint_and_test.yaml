@@ -7,8 +7,31 @@ name: Lint and test
       - release
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Biome lint
+        run: npx biome ci src/ tests/
+
   lint_and_test:
-    name: "Lint and test (Node ${{ matrix.node-version }})"
+    name: "Test (Node ${{ matrix.node-version }})"
+    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read

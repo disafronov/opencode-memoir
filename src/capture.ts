@@ -1,6 +1,13 @@
-import { type MemoirResult, deriveStorePath, ensureStore, getCurrentBranch, readMemoirValue, runMemoir } from './store.js';
-import { debugLog } from './debug.js';
-import { errorMessage } from './utils.js';
+import { debugLog } from "./debug.js";
+import {
+  deriveStorePath,
+  ensureStore,
+  getCurrentBranch,
+  type MemoirResult,
+  readMemoirValue,
+  runMemoir,
+} from "./store.js";
+import { errorMessage } from "./utils.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,7 +28,15 @@ export function setCliOverrides(overrides: MemoirCliOverrides | null): void {
   _cliOverrides = overrides;
 }
 
-export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch', 'ApplyPatch', 'MultiFileEdit']);
+export const EDIT_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookEdit",
+  "apply_patch",
+  "ApplyPatch",
+  "MultiFileEdit",
+]);
 
 export interface EditRecord {
   tool: string;
@@ -63,7 +78,7 @@ const toolMetricsBySession = new Map<string, Map<string, ToolMetrics>>();
 const cachedBranchBySession = new Map<string, string>();
 
 export function getCachedBranch(sessionID: string): string {
-  return cachedBranchBySession.get(sessionID) ?? 'unknown';
+  return cachedBranchBySession.get(sessionID) ?? "unknown";
 }
 
 export function setCachedBranch(sessionID: string, branch: string): void {
@@ -74,14 +89,22 @@ export function setCachedBranch(sessionID: string, branch: string): void {
 /** Record an edit for a specific session. */
 export function recordEdit(sessionID: string, edit: EditRecord): void {
   let edits = pendingEditsBySession.get(sessionID);
-  if (!edits) { edits = []; pendingEditsBySession.set(sessionID, edits); evictOldest(pendingEditsBySession, 500); }
+  if (!edits) {
+    edits = [];
+    pendingEditsBySession.set(sessionID, edits);
+    evictOldest(pendingEditsBySession, 500);
+  }
   edits.push(edit);
 }
 
 /** Accumulate tool metrics for a specific session (adds to previous values). */
 export function recordToolMetrics(sessionID: string, tool: string, metrics: ToolMetrics): void {
   let sessionMetrics = toolMetricsBySession.get(sessionID);
-  if (!sessionMetrics) { sessionMetrics = new Map(); toolMetricsBySession.set(sessionID, sessionMetrics); evictOldest(toolMetricsBySession, 500); }
+  if (!sessionMetrics) {
+    sessionMetrics = new Map();
+    toolMetricsBySession.set(sessionID, sessionMetrics);
+    evictOldest(toolMetricsBySession, 500);
+  }
   const prev = sessionMetrics.get(tool) ?? { calls: 0, errors: 0 };
   sessionMetrics.set(tool, {
     calls: prev.calls + metrics.calls,
@@ -113,11 +136,11 @@ export function clearSession(sessionID: string): void {
 export function parseTurnMetrics(text: string): Map<string, ToolMetrics> {
   const result = new Map<string, ToolMetrics>();
   if (!text) return result;
-  const parts = text.split('|');
+  const parts = text.split("|");
   for (const part of parts) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    const [tool, callsStr, errorsStr] = trimmed.split(':');
+    const [tool, callsStr, errorsStr] = trimmed.split(":");
     if (!tool) continue;
     result.set(tool, {
       calls: parseInt(callsStr, 10) || 0,
@@ -128,9 +151,7 @@ export function parseTurnMetrics(text: string): Map<string, ToolMetrics> {
 }
 
 export function serializeTurnMetrics(map: Map<string, ToolMetrics>): string {
-  return [...map.entries()]
-    .map(([tool, m]) => `${tool}:${m.calls}:${m.errors}`)
-    .join(' | ');
+  return [...map.entries()].map(([tool, m]) => `${tool}:${m.calls}:${m.errors}`).join(" | ");
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +163,9 @@ const flushQueues = new Map<string, Promise<void>>();
 async function acquireFlushLock(store: string): Promise<() => void> {
   const prev = flushQueues.get(store) ?? Promise.resolve();
   let release: () => void;
-  const next = new Promise<void>(resolve => { release = resolve; });
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   flushQueues.set(store, next);
   await prev;
   return () => {
@@ -156,11 +179,13 @@ async function acquireFlushLock(store: string): Promise<() => void> {
 // flushCapture — flushes one session, or all if no sessionID
 // ---------------------------------------------------------------------------
 
-export async function flushCapture(store?: string, branch?: string, sessionID?: string): Promise<void> {
+export async function flushCapture(
+  store?: string,
+  branch?: string,
+  sessionID?: string,
+): Promise<void> {
   // Determine which sessions to flush
-  const targets: string[] = sessionID
-    ? [sessionID]
-    : [...pendingEditsBySession.keys()]; // dispose: flush all sessions
+  const targets: string[] = sessionID ? [sessionID] : [...pendingEditsBySession.keys()]; // dispose: flush all sessions
   if (targets.length === 0) return;
 
   try {
@@ -176,7 +201,11 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
       // Atomic swap: grab current data and replace with empty containers.
       // Any recordEdit/recordToolMetrics call during the subsequent I/O
       // goes into the fresh empty containers and is safe.
-      interface SessionData { edits: EditRecord[]; metrics: Map<string, ToolMetrics>; sessionBranch: string; }
+      interface SessionData {
+        edits: EditRecord[];
+        metrics: Map<string, ToolMetrics>;
+        sessionBranch: string;
+      }
       const perSession: SessionData[] = [];
       const swappedSids = new Map<string, number>(); // sid → index in perSession for rollback
       for (const sid of targets) {
@@ -186,12 +215,12 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
         const metrics = toolMetricsBySession.get(sid) ?? new Map();
         toolMetricsBySession.set(sid, new Map());
         const sb = branch ?? cachedBranchBySession.get(sid);
-        perSession.push({ edits, metrics, sessionBranch: sb ?? 'unknown' });
+        perSession.push({ edits, metrics, sessionBranch: sb ?? "unknown" });
         swappedSids.set(sid, idx);
       }
 
       // Skip if nothing to flush
-      if (!perSession.some(p => p.edits.length > 0 || p.metrics.size > 0)) return;
+      if (!perSession.some((p) => p.edits.length > 0 || p.metrics.size > 0)) return;
 
       // Wrap I/O in inner try — if it fails, restore swapped data before
       // propagating the error so the next flush retries it.
@@ -199,7 +228,7 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
         // Resolve 'unknown' branches (read-only I/O, safe inside lock —
         // the lock serializes per-store CLI access)
         for (const p of perSession) {
-          if (p.sessionBranch === 'unknown' || !p.sessionBranch) {
+          if (p.sessionBranch === "unknown" || !p.sessionBranch) {
             p.sessionBranch = await (_cliOverrides?.getCurrentBranch ?? getCurrentBranch)(store);
           }
         }
@@ -210,21 +239,32 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
           if (edits.length === 0 && metrics.size === 0) continue;
 
           const [prevCodeRaw, prevTurnRaw] = await Promise.all([
-            edits.length > 0 ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(store, `metrics.code.${branchKey}`) : Promise.resolve(''),
-            metrics.size > 0 ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(store, `metrics.turn.${branchKey}`) : Promise.resolve(''),
+            edits.length > 0
+              ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(
+                  store,
+                  `metrics.code.${branchKey}`,
+                )
+              : Promise.resolve(""),
+            metrics.size > 0
+              ? (_cliOverrides?.readMemoirValue ?? readMemoirValue)(
+                  store,
+                  `metrics.turn.${branchKey}`,
+                )
+              : Promise.resolve(""),
           ]);
 
           let codeWrite: Promise<MemoirResult> | undefined;
           if (edits.length > 0) {
-            const files = [...new Set(edits.map(e => e.filePath))];
+            const files = [...new Set(edits.map((e) => e.filePath))];
             const entry = {
               timestamp: Date.now() / 1000,
-              summary: `Changed ${edits.length} block(s) across ${files.length} file(s): ${files.join(', ')}`,
+              summary: `Changed ${edits.length} block(s) across ${files.length} file(s): ${files.join(", ")}`,
               files,
             };
 
             let acc: { schema_version: number; entries: MetricsEntry[] } = {
-              schema_version: 2, entries: [],
+              schema_version: 2,
+              entries: [],
             };
             if (prevCodeRaw) {
               try {
@@ -234,12 +274,27 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
                   if (acc.schema_version < 2) acc.schema_version = 2;
                 }
               } catch (e) {
-                debugLog('flushCapture: failed to parse existing code metrics, starting fresh:', errorMessage(e));
+                debugLog(
+                  "flushCapture: failed to parse existing code metrics, starting fresh:",
+                  errorMessage(e),
+                );
               }
             }
             acc.entries.push(entry);
-            if (acc.entries.length > METRICS_CODE_MAX) acc.entries = acc.entries.slice(-METRICS_CODE_MAX);
-            codeWrite = (_cliOverrides?.runMemoir ?? runMemoir)(['-s', store, 'remember', '--replace', JSON.stringify(acc), '-p', `metrics.code.${branchKey}`], { cwd: store });
+            if (acc.entries.length > METRICS_CODE_MAX)
+              acc.entries = acc.entries.slice(-METRICS_CODE_MAX);
+            codeWrite = (_cliOverrides?.runMemoir ?? runMemoir)(
+              [
+                "-s",
+                store,
+                "remember",
+                "--replace",
+                JSON.stringify(acc),
+                "-p",
+                `metrics.code.${branchKey}`,
+              ],
+              { cwd: store },
+            );
           }
 
           let turnWrite: Promise<MemoirResult> | undefined;
@@ -247,9 +302,23 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
             const existing = parseTurnMetrics(prevTurnRaw);
             for (const [tool, current] of metrics) {
               const prev = existing.get(tool) ?? { calls: 0, errors: 0 };
-              existing.set(tool, { calls: prev.calls + current.calls, errors: prev.errors + current.errors });
+              existing.set(tool, {
+                calls: prev.calls + current.calls,
+                errors: prev.errors + current.errors,
+              });
             }
-            turnWrite = (_cliOverrides?.runMemoir ?? runMemoir)(['-s', store, 'remember', '--replace', serializeTurnMetrics(existing), '-p', `metrics.turn.${branchKey}`], { cwd: store });
+            turnWrite = (_cliOverrides?.runMemoir ?? runMemoir)(
+              [
+                "-s",
+                store,
+                "remember",
+                "--replace",
+                serializeTurnMetrics(existing),
+                "-p",
+                `metrics.turn.${branchKey}`,
+              ],
+              { cwd: store },
+            );
           }
 
           // Check writes for this session's pair
@@ -286,6 +355,6 @@ export async function flushCapture(store?: string, branch?: string, sessionID?: 
       releaseLock();
     }
   } catch (e) {
-    debugLog('flushCapture: failed:', errorMessage(e));
+    debugLog("flushCapture: failed:", errorMessage(e));
   }
 }
