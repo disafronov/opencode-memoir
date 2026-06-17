@@ -1,21 +1,21 @@
-import { execFile, execFileSync } from 'node:child_process';
-import { access, mkdir, rm } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
-import { promisify } from 'node:util';
-import { debugLog } from './debug.js';
-import { errorMessage } from './utils.js';
+import { execFile, execFileSync } from "node:child_process";
+import { access, mkdir, rm } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
+import { debugLog } from "./debug.js";
+import { errorMessage } from "./utils.js";
 
 const execFileAsync = promisify(execFile);
 
-export const MEMOIR_PACKAGE = 'memoir-ai';
+export const MEMOIR_PACKAGE = "memoir-ai";
 
 /**
  * Pinned memoir-ai version for uvx/uv fallbacks.
  * Mirrors plugins/claude-code/scripts/resolve-memoir-cli.sh.
  * Bump deliberately after verifying the new release works with this plugin.
  */
-export const MEMOIR_AI_PIN = '0.2.2';
+export const MEMOIR_AI_PIN = "0.2.2";
 
 /** Timeout (ms) for synchronous git subprocess calls. */
 export const GIT_TIMEOUT_MS = 3_000;
@@ -82,15 +82,23 @@ export function _checkNoGit(cwd: string): boolean {
  * @returns The main worktree path, or empty string if not in a git repo.
  */
 export function _main_worktree_root(cwd: string): string {
-  if (_checkNoGit(cwd)) return '';
+  if (_checkNoGit(cwd)) return "";
   try {
     // Fast path: check if --git-dir and --git-common-dir resolve to the same path
-    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
-    const gitCommonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
+    const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], {
+      cwd,
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+    }).trim();
+    const gitCommonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd,
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+    }).trim();
 
     // Resolve to absolute paths
     const resolvePath = (path: string): string => {
-      if (path.startsWith('/')) return path;
+      if (path.startsWith("/")) return path;
       return join(cwd, path);
     };
     const gitDirAbs = resolvePath(gitDir);
@@ -98,27 +106,39 @@ export function _main_worktree_root(cwd: string): string {
 
     if (gitDirAbs === gitCommonDirAbs) {
       // Main worktree or non-worktree repo
-      return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
+      return execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd,
+        encoding: "utf8",
+        timeout: GIT_TIMEOUT_MS,
+      }).trim();
     }
 
     // Slow path: parse `git worktree list --porcelain` for the main worktree
-    const worktreeList = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
-    const firstLine = worktreeList.split('\n')[0];
-    if (firstLine.startsWith('worktree ')) {
-      const mainWorktree = firstLine.substring('worktree '.length).trim();
-      if (mainWorktree && mainWorktree !== '(bare)') {
+    const worktreeList = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd,
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+    });
+    const firstLine = worktreeList.split("\n")[0];
+    if (firstLine.startsWith("worktree ")) {
+      const mainWorktree = firstLine.substring("worktree ".length).trim();
+      if (mainWorktree && mainWorktree !== "(bare)") {
         return mainWorktree;
       }
     }
 
     // Fallback: try --show-toplevel (bare repo or older git)
-    return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: GIT_TIMEOUT_MS }).trim();
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd,
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+    }).trim();
   } catch (e) {
-    debugLog('_main_worktree_root: not a git repo or git error:', errorMessage(e));
+    debugLog("_main_worktree_root: not a git repo or git error:", errorMessage(e));
     sweepNoGitCache();
     _noGitCache.set(cwd, Date.now());
     if (_noGitCache.size > NO_GIT_CACHE_MAX) evictOldestNoGit();
-    return '';
+    return "";
   }
 }
 
@@ -149,15 +169,15 @@ export function deriveStorePath(cwd: string = process.cwd()): string {
       projectDir = resolve(cwd);
     }
   } catch (e) {
-    debugLog('deriveStorePath: unexpected error:', errorMessage(e));
+    debugLog("deriveStorePath: unexpected error:", errorMessage(e));
     // Fallback to raw cwd if everything else fails
     projectDir = cwd;
   }
 
   // Slug = absolute path with '/' and '.' replaced by '-'
   // Matches Claude Code's own ~/.claude/projects/ naming convention
-  const slug = projectDir.replace(/[/.]/g, '-');
-  return join(homedir(), '.memoir', slug);
+  const slug = projectDir.replace(/[/.]/g, "-");
+  return join(homedir(), ".memoir", slug);
 }
 
 /** Set by plugin options (`store` key). */
@@ -193,13 +213,15 @@ export async function ensureStore(store: string): Promise<void> {
   }
 
   try {
-    await access(join(store, '.git'));
+    await access(join(store, ".git"));
     ensuredStores.add(store);
     if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
     return; // already exists
   } catch {
     // ensure parent dir exists (memoir new doesn't create intermediate dirs)
-    await mkdir(join(store, '..'), { recursive: true }).catch((e: unknown) => debugLog('ensureStore: mkdir failed:', errorMessage(e)));
+    await mkdir(join(store, ".."), { recursive: true }).catch((e: unknown) =>
+      debugLog("ensureStore: mkdir failed:", errorMessage(e)),
+    );
   }
 
   // Register this creation so concurrent callers coallesce
@@ -207,18 +229,20 @@ export async function ensureStore(store: string): Promise<void> {
     const tmpDir = join(tmpdir(), `memoir-scratch-${Date.now()}`);
     try {
       await mkdir(tmpDir, { recursive: true });
-      await execFileAsync('git', ['init', '-q', tmpDir], { timeout: 5000 });
-      const result = await runMemoir(['new', store, '--taxonomy-builtin'], { cwd: tmpDir });
+      await execFileAsync("git", ["init", "-q", tmpDir], { timeout: 5000 });
+      const result = await runMemoir(["new", store, "--taxonomy-builtin"], { cwd: tmpDir });
       if (!result.ok) {
         throw new Error(result.error);
       }
       ensuredStores.add(store);
       if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
     } catch (e: unknown) {
-      debugLog('ensureStore: creation failed:', errorMessage(e));
+      debugLog("ensureStore: creation failed:", errorMessage(e));
       throw e;
     } finally {
-      rm(tmpDir, { recursive: true, force: true }).catch((e) => debugLog('tmp cleanup failed:', errorMessage(e)));
+      rm(tmpDir, { recursive: true, force: true }).catch((e) =>
+        debugLog("tmp cleanup failed:", errorMessage(e)),
+      );
     }
   })();
   storeCreations.set(store, creationPromise);
@@ -245,16 +269,19 @@ export function reorderResolver<T>(resolver: T[], winner: T): T[] {
 /** Which CLI launcher successfully resolved memoir. Cached to avoid redundant fallback probing. */
 export let memoirResolved: string | null = null;
 
-export async function runMemoir(args: string[], options: { cwd?: string } = {}): Promise<MemoirResult> {
+export async function runMemoir(
+  args: string[],
+  options: { cwd?: string } = {},
+): Promise<MemoirResult> {
   let specs = memoirSpawnSpecs(args);
 
   // Put cached resolver first so we skip redundant fallback probing
   if (memoirResolved) {
-    const winner = specs.find(s => s.label === memoirResolved);
+    const winner = specs.find((s) => s.label === memoirResolved);
     if (winner) specs = reorderResolver(specs, winner);
   }
 
-  let lastError = '';
+  let lastError = "";
   let lastResolver: string | undefined;
   for (const spec of specs) {
     try {
@@ -269,7 +296,7 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
     } catch (e) {
       lastError = errorMessage(e);
       lastResolver = spec.label;
-      debugLog('runMemoir: fallback', spec.label, 'failed:', lastError);
+      debugLog("runMemoir: fallback", spec.label, "failed:", lastError);
       // Invalidate cache so we don't keep trying a broken resolver on next call
       if (memoirResolved === spec.label) memoirResolved = null;
     }
@@ -280,9 +307,17 @@ export async function runMemoir(args: string[], options: { cwd?: string } = {}):
 
 export function memoirSpawnSpecs(args: string[]): SpawnSpec[] {
   return [
-    { command: 'memoir', args, label: 'memoir' },
-    { command: 'uvx', args: ['--from', `${MEMOIR_PACKAGE}==${MEMOIR_AI_PIN}`, 'memoir', ...args], label: 'uvx' },
-    { command: 'uv', args: ['tool', 'run', '--from', `${MEMOIR_PACKAGE}==${MEMOIR_AI_PIN}`, 'memoir', ...args], label: 'uv tool run' },
+    { command: "memoir", args, label: "memoir" },
+    {
+      command: "uvx",
+      args: ["--from", `${MEMOIR_PACKAGE}==${MEMOIR_AI_PIN}`, "memoir", ...args],
+      label: "uvx",
+    },
+    {
+      command: "uv",
+      args: ["tool", "run", "--from", `${MEMOIR_PACKAGE}==${MEMOIR_AI_PIN}`, "memoir", ...args],
+      label: "uv tool run",
+    },
   ];
 }
 
@@ -290,13 +325,13 @@ export function memoirSpawnSpecs(args: string[]): SpawnSpec[] {
 export async function getCurrentBranch(store: string): Promise<string> {
   try {
     const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
-    const result = await runFn(['--json', '-s', store, 'status'], { cwd: store });
-    if (!result.ok) return 'unknown';
+    const result = await runFn(["--json", "-s", store, "status"], { cwd: store });
+    if (!result.ok) return "unknown";
     const data = JSON.parse(result.stdout);
-    return data.branch || 'unknown';
+    return data.branch || "unknown";
   } catch (e) {
-    debugLog('getCurrentBranch: failed:', errorMessage(e));
-    return 'unknown';
+    debugLog("getCurrentBranch: failed:", errorMessage(e));
+    return "unknown";
   }
 }
 
@@ -308,11 +343,14 @@ export async function getCurrentBranch(store: string): Promise<string> {
 export async function codeGitBranch(): Promise<string> {
   try {
     const execFn = _storeTestOverrides.execFileAsyncFn ?? execFileAsync;
-    const { stdout } = await execFn('git', ['branch', '--show-current'], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
+    const { stdout } = await execFn("git", ["branch", "--show-current"], {
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+    });
     return stdout.trim();
   } catch (e) {
-    debugLog('codeGitBranch: failed:', errorMessage(e));
-    return '';
+    debugLog("codeGitBranch: failed:", errorMessage(e));
+    return "";
   }
 }
 
@@ -324,13 +362,13 @@ export async function branchExistsInMemoir(store: string, name: string): Promise
   if (!name) return false;
   try {
     const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
-    const result = await runFn(['--json', '-s', store, 'branch'], { cwd: store });
+    const result = await runFn(["--json", "-s", store, "branch"], { cwd: store });
     if (!result.ok) return false;
     const data = JSON.parse(result.stdout);
     const branches: string[] = data?.branches ?? [];
     return branches.includes(name);
   } catch (e) {
-    debugLog('branchExistsInMemoir: failed:', errorMessage(e));
+    debugLog("branchExistsInMemoir: failed:", errorMessage(e));
     return false;
   }
 }
@@ -353,16 +391,18 @@ export async function autoMatchMemoirBranch(store: string): Promise<string> {
 
   // Create the branch from main if it doesn't exist yet
   if (!(await branchExistsInMemoir(store, codeBranch))) {
-    const result = await runFn(['-s', store, 'branch', codeBranch, '--from', 'main'], { cwd: store });
+    const result = await runFn(["-s", store, "branch", codeBranch, "--from", "main"], {
+      cwd: store,
+    });
     if (!result.ok) {
-      debugLog('autoMatchMemoirBranch: create branch failed:', result.error);
+      debugLog("autoMatchMemoirBranch: create branch failed:", result.error);
       return getCurrentBranch(store);
     }
   }
   // Checkout the branch
-  const result = await runFn(['-s', store, 'checkout', codeBranch], { cwd: store });
+  const result = await runFn(["-s", store, "checkout", codeBranch], { cwd: store });
   if (!result.ok) {
-    debugLog('autoMatchMemoirBranch: checkout failed:', result.error);
+    debugLog("autoMatchMemoirBranch: checkout failed:", result.error);
     return getCurrentBranch(store);
   }
   return codeBranch;
@@ -372,25 +412,35 @@ export async function autoMatchMemoirBranch(store: string): Promise<string> {
  * Read the content of a single memoir key (first item found).
  * Returns empty string if key doesn't exist or on error.
  */
-export async function readMemoirValue(store: string, key: string, namespace: string = 'default'): Promise<string> {
+export async function readMemoirValue(
+  store: string,
+  key: string,
+  namespace: string = "default",
+): Promise<string> {
   try {
     const runFn = _storeTestOverrides.runMemoirFn ?? runMemoir;
-    const result = await runFn(['--json', '-s', store, 'get', key, '-n', namespace], { cwd: store });
-    if (!result.ok) return '';
+    const result = await runFn(["--json", "-s", store, "get", key, "-n", namespace], {
+      cwd: store,
+    });
+    if (!result.ok) return "";
     const parsed = JSON.parse(result.stdout);
     const items = parsed?.items ?? [];
     const value = items[0]?.value?.content;
-    return typeof value === 'string' ? value : '';
+    return typeof value === "string" ? value : "";
   } catch (e) {
-    debugLog('readMemoirValue: failed:', errorMessage(e));
-    return '';
+    debugLog("readMemoirValue: failed:", errorMessage(e));
+    return "";
   }
 }
 
 // --- Test seams (only for unit tests) ---
 type StoreTestOverrides = {
   runMemoirFn?: (args: string[], options: { cwd?: string }) => Promise<MemoirResult>;
-  execFileAsyncFn?: (command: string, args: string[], options?: Record<string, unknown>) => Promise<{ stdout: string }>;
+  execFileAsyncFn?: (
+    command: string,
+    args: string[],
+    options?: Record<string, unknown>,
+  ) => Promise<{ stdout: string }>;
 };
 let _storeTestOverrides: StoreTestOverrides = {};
 export function setStoreTestOverrides(overrides: StoreTestOverrides): void {

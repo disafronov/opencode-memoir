@@ -19,7 +19,10 @@
     "build": "tsc -p tsconfig.json --declaration --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:node:* --external:@opencode-ai/plugin --sourcemap",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "prepublishOnly": "npm run build && npm test && node -e \"import('./dist/index.js').then(m=>{const d=m.default;if(!d||typeof d!=='object'||typeof d.server!=='function'||d.id!=='opencode-memoir'){console.error('Smoke FAILED: default export is not a V1 plugin module ({ id, server })');process.exit(1)}else{console.log('Smoke OK: id=',d.id,'server=',typeof d.server)}})\""
+    "prepublishOnly": "npm run build && npm test && node -e \"import('./dist/index.js').then(m=>{const d=m.default;if(!d||typeof d!=='object'||typeof d.server!=='function'||d.id!=='opencode-memoir'){console.error('Smoke FAILED: default export is not a V1 plugin module ({ id, server })');process.exit(1)}else{console.log('Smoke OK: id=',d.id,'server=',typeof d.server)}})\"",
+    "lint": "biome check src/ tests/",
+    "lint:fix": "biome check --write src/ tests/",
+    "format": "biome format --write src/ tests/"
   },
   "keywords": [
     "opencode",
@@ -43,6 +46,7 @@
     "@opencode-ai/plugin": "^1.17.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
     "@types/node": "^25.9.3",
     "esbuild": "^0.28.0",
     "tsx": "^4.22.4",
