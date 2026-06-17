@@ -11,6 +11,11 @@ import { pendingRecall, shouldTriggerRecall } from "./recall-gate.js";
 import { autoMatchMemoirBranch } from "./store.js";
 import { errorMessage } from "./utils.js";
 
+// TTL cache for autoMatchMemoirBranch — avoids redundant subprocess calls
+// when the branch hasn't changed between messages (common case).
+const branchMatchCache = new Map<string, { branch: string; ts: number }>();
+const BRANCH_MATCH_TTL_MS = 5_000; // 5 seconds
+
 export async function handleShellEnv(
   storeRoot: string,
   _input: unknown,
@@ -94,7 +99,19 @@ export async function handleChatMessage(
     // user switches git branch between turns.)
     const _cachedBranch = getCachedBranch(sid);
     const prevBranch = _cachedBranch === "unknown" ? undefined : _cachedBranch;
-    setCachedBranch(sid, await autoMatchMemoirBranch(storeRoot));
+
+    // Use TTL cache to avoid redundant subprocess calls on the hot path.
+    // Branch switches mid-conversation are rare, so most calls return the
+    // same result within the 5s window.
+    const now = Date.now();
+    const cached = branchMatchCache.get(sid);
+    if (cached && now - cached.ts < BRANCH_MATCH_TTL_MS) {
+      setCachedBranch(sid, cached.branch);
+    } else {
+      const branch = await autoMatchMemoirBranch(storeRoot);
+      branchMatchCache.set(sid, { branch, ts: now });
+      setCachedBranch(sid, branch);
+    }
 
     // Skip capture flush when MEMOIR_NO_CAPTURE is set.
     // Flush under the PREVIOUS branch (the one edits were made on).
