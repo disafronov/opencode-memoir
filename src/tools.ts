@@ -92,16 +92,23 @@ const memoirRecall = tool({
       : args.namespaces && args.namespaces.length > 0
         ? args.namespaces
         : DEFAULT_RECALL_NAMESPACES;
-    const sections: string[] = [];
-    for (const namespace of namespaces) {
-      const summarizeResult = await runMemoir(
-        ["--json", "-s", store, "summarize", "--depth", "3", "-n", namespace],
-        { cwd: store },
-      );
-      if (!summarizeResult.ok) return summarizeResult.error;
-      const output = tryPrettyJson(summarizeResult.stdout);
-      sections.push(`## namespace: ${namespace}\n${output}`);
-    }
+    const results = await Promise.all(
+      namespaces.map(async (namespace) => {
+        const summarizeResult = await runMemoir(
+          ["--json", "-s", store, "summarize", "--depth", "3", "-n", namespace],
+          { cwd: store },
+        );
+        if (!summarizeResult.ok) return summarizeResult.error;
+        const output = tryPrettyJson(summarizeResult.stdout);
+        return `## namespace: ${namespace}\n${output}`;
+      }),
+    );
+    const sections: string[] = results.filter((r): r is string => typeof r === "string");
+    // If any namespace failed, return the first error
+    const errorResult = results.find(
+      (r) => typeof r === "string" && r.startsWith("Memoir command failed"),
+    );
+    if (errorResult) return errorResult as string;
     const note = args.includeMetrics
       ? "Metrics were included by request."
       : "Ignore metrics.* and taxonomy:v1:* entries unless explicitly needed. If default is empty or only metrics, inspect project:onboard/codebase:onboard before concluding there is no memory.";
