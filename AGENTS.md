@@ -103,6 +103,6 @@ Two-stage build:
 
 ## CI/CD
 
-- PRs: `lint_and_test.yaml` (Biome lint + typecheck → Node 22/24 test matrix)
+- PRs: `lint_and_test.yaml` (Biome lint + typecheck → Node 24/26 test matrix)
 - Main/release pushes: `semantic.yaml` (semantic-release)
 - Version tags: `publish-npm.yaml` (npm trusted publishing)
