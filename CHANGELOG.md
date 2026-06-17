@@ -1,3 +1,14 @@
+## [1.1.7](https://github.com/disafronov/opencode-memoir/compare/v1.1.6...v1.1.7) (2026-06-17)
+
+### Bug Fixes
+
+* make memoir_remember.path required in schema ([bcb528d](https://github.com/disafronov/opencode-memoir/commit/bcb528d2c9d9b43daebb20ee90b5a3d2acd5d890))
+
+### Performance Improvements
+
+* add TTL cache for autoMatchMemoirBranch ([8f9f61a](https://github.com/disafronov/opencode-memoir/commit/8f9f61a7cfe701986423d1be544fbc18aabecd7d))
+* parallelize namespace summarization in memoir_recall ([3377432](https://github.com/disafronov/opencode-memoir/commit/3377432db0d390a53b8edef30fd38a04f634ea1c))
+
 ## [1.1.6](https://github.com/disafronov/opencode-memoir/compare/v1.1.5...v1.1.6) (2026-06-17)
 
 ## [1.1.5](https://github.com/disafronov/opencode-memoir/compare/v1.1.4...v1.1.5) (2026-06-16)
