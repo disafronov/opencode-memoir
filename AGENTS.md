@@ -21,7 +21,7 @@ npm run format         # biome format --write src/ tests/
 npx tsx --test tests/recall-gate.test.ts
 
 # Full verification (what CI runs)
-npm run lint && npm run build && npm test
+npm run lint && npm run typecheck && npm run build && npm test
 ```
 
 **Biome** is the linter and formatter (`@biomejs/biome`). CI runs `biome ci src/ tests/` which is stricter than `biome check`.
@@ -103,6 +103,6 @@ Two-stage build:
 
 ## CI/CD
 
-- PRs: `lint_and_test.yaml` (Biome lint → Node 20/22 test matrix)
+- PRs: `lint_and_test.yaml` (Biome lint + typecheck → Node 22/24 test matrix)
 - Main/release pushes: `semantic.yaml` (semantic-release)
 - Version tags: `publish-npm.yaml` (npm trusted publishing)
