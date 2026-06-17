@@ -6,7 +6,7 @@ import { coercePaths, MEMOIR_GET_MAX_KEYS, SECRET_PATTERN, tryPrettyJson } from 
 
 type MemoirRememberArgs = {
   content: string;
-  path?: string | string[];
+  path: string | string[];
   namespace?: string;
   replace?: boolean;
 };
@@ -33,10 +33,7 @@ const memoirRemember = tool({
   description: "Explicitly save a durable memory to Memoir at one or more semantic taxonomy paths.",
   args: {
     content: tool.schema.string().describe("Memory content to save. Do not include secrets."),
-    path: tool.schema
-      .string()
-      .optional()
-      .describe("Semantic taxonomy path, e.g. preferences.coding.style."),
+    path: tool.schema.string().describe("Semantic taxonomy path, e.g. preferences.coding.style."),
     namespace: tool.schema.string().optional().describe("Memoir namespace. Defaults to default."),
     replace: tool.schema.boolean().optional().describe("Replace existing value at the path."),
   },
