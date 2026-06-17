@@ -29,7 +29,10 @@ jobs:
       - name: Run Biome lint
         run: npx biome ci src/ tests/
 
-  lint_and_test:
+      - name: Run typecheck
+        run: npm run typecheck
+
+  test:
     name: "Test (Node ${{ matrix.node-version }})"
     needs: lint
     runs-on: ubuntu-latest
@@ -37,7 +40,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [22, 24]
       fail-fast: false
     steps:
       - name: Checkout
