@@ -103,17 +103,26 @@ const memoirRecall = tool({
         return `## namespace: ${namespace}\n${output}`;
       }),
     );
-    const sections: string[] = results.filter((r): r is string => typeof r === "string");
-    // If any namespace failed, return the first error
-    const errorResult = results.find(
-      (r) => typeof r === "string" && r.startsWith("Memoir command failed"),
-    );
-    if (errorResult) return errorResult as string;
+    const sections: string[] = [];
+    const errors: string[] = [];
+    for (const r of results) {
+      if (typeof r === "string") {
+        if (r.startsWith("Memoir command failed")) {
+          errors.push(r);
+        } else {
+          sections.push(r);
+        }
+      }
+    }
     const note = args.includeMetrics
       ? "Metrics were included by request."
       : "Ignore metrics.* and taxonomy:v1:* entries unless explicitly needed. If default is empty or only metrics, inspect project:onboard/codebase:onboard before concluding there is no memory.";
     const query = args.query ? `Query: ${args.query}\n` : "";
-    return `${query}${note}\nPick at most 5-7 relevant exact keys across namespaces, then call memoir_get with the matching namespace if values are needed.\n${sections.join("\n\n")}`;
+    const errorBlock =
+      errors.length > 0
+        ? `\n\nNote: some namespaces failed:\n${errors.map((e) => `  - ${e}`).join("\n")}`
+        : "";
+    return `${query}${note}\nPick at most 5-7 relevant exact keys across namespaces, then call memoir_get with the matching namespace if values are needed.\n${sections.join("\n\n")}${errorBlock}`;
   },
 });
 
