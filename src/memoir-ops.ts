@@ -88,6 +88,8 @@ export async function launchUi(store: string): Promise<string> {
       // Scrub process.env — only forward whitelisted vars to avoid leaking secrets
       env: Object.fromEntries(
         Object.entries({
+          HOME: process.env.HOME,
+          USER: process.env.USER,
           PATH: process.env.PATH,
           MEMOIR_STORE: process.env.MEMOIR_STORE,
           MEMOIR_DEBUG: process.env.MEMOIR_DEBUG,
@@ -164,11 +166,17 @@ export async function unmergedBranchesText(store: string): Promise<string> {
   const data = JSON.parse(branchResult.stdout);
   const branches: string[] = data?.branches ?? [];
   const unmerged: string[] = [];
-  for (const branch of branches) {
-    if (branch === "main") continue;
-    const diffResult = await runMemoir(["-s", store, "diff", branch, "main", "--stat"], {
-      cwd: store,
-    });
+  const diffResults = await Promise.all(
+    branches
+      .filter((b) => b !== "main")
+      .map(async (branch) => {
+        const diffResult = await runMemoir(["-s", store, "diff", branch, "main", "--stat"], {
+          cwd: store,
+        });
+        return { branch, diffResult };
+      }),
+  );
+  for (const { branch, diffResult } of diffResults) {
     if (!diffResult.ok) {
       debugLog("command.execute.before: memoir diff failed", diffResult.error);
       continue;
