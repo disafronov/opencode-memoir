@@ -142,6 +142,9 @@ export function _main_worktree_root(cwd: string): string {
   }
 }
 
+/** Cache for deriveStorePath() — avoids repeated execFileSync calls for same cwd. */
+let _storePathCache: { cwd: string; path: string } | null = null;
+
 /**
  * Derive `~/.memoir/<slug>` from cwd.
  * Override via `store` plugin option or `MEMOIR_STORE` env var.
@@ -157,6 +160,9 @@ export function deriveStorePath(cwd: string = process.cwd()): string {
   if (pluginStoreOverride) return pluginStoreOverride;
   const configured = process.env.MEMOIR_STORE;
   if (configured) return configured;
+
+  // Cache check — skip expensive execFileSync calls for repeated cwd
+  if (_storePathCache && _storePathCache.cwd === cwd) return _storePathCache.path;
 
   // Prefer git root so all subdirectories and worktrees share one store
   let projectDir: string;
@@ -177,7 +183,9 @@ export function deriveStorePath(cwd: string = process.cwd()): string {
   // Slug = absolute path with '/' and '.' replaced by '-'
   // Matches Claude Code's own ~/.claude/projects/ naming convention
   const slug = projectDir.replace(/[/.]/g, "-");
-  return join(homedir(), ".memoir", slug);
+  const result = join(homedir(), ".memoir", slug);
+  _storePathCache = { cwd, path: result };
+  return result;
 }
 
 /** Set by plugin options (`store` key). */
@@ -215,7 +223,10 @@ export async function ensureStore(store: string): Promise<void> {
   try {
     await access(join(store, ".git"));
     ensuredStores.add(store);
-    if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
+    if (ensuredStores.size > ENSURED_STORES_MAX) {
+      const first = ensuredStores.keys().next().value;
+      if (first !== undefined) ensuredStores.delete(first);
+    }
     return; // already exists
   } catch {
     // ensure parent dir exists (memoir new doesn't create intermediate dirs)
@@ -235,7 +246,10 @@ export async function ensureStore(store: string): Promise<void> {
         throw new Error(result.error);
       }
       ensuredStores.add(store);
-      if (ensuredStores.size > ENSURED_STORES_MAX) ensuredStores.clear();
+      if (ensuredStores.size > ENSURED_STORES_MAX) {
+        const first = ensuredStores.keys().next().value;
+        if (first !== undefined) ensuredStores.delete(first);
+      }
     } catch (e: unknown) {
       debugLog("ensureStore: creation failed:", errorMessage(e));
       throw e;
@@ -431,6 +445,11 @@ export async function readMemoirValue(
     debugLog("readMemoirValue: failed:", errorMessage(e));
     return "";
   }
+}
+
+/** Reset the deriveStorePath cache — used in tests. */
+export function _resetStorePathCache(): void {
+  _storePathCache = null;
 }
 
 // --- Test seams (only for unit tests) ---

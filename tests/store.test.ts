@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { deriveStorePath, reorderResolver } from "../src/store.ts";
+import { _resetStorePathCache, deriveStorePath, reorderResolver } from "../src/store.ts";
 
 describe("deriveStorePath", () => {
   afterEach(() => {
     delete process.env.MEMOIR_STORE;
+    _resetStorePathCache();
   });
 
   it("uses MEMOIR_STORE env var when set", () => {
