@@ -1,9 +1,9 @@
 import { debugLog } from "./debug.js";
+import type { MemoirResult } from "./store.js";
 import {
   deriveStorePath,
   ensureStore,
   getCurrentBranch,
-  type MemoirResult,
   readMemoirValue,
   runMemoir,
 } from "./store.js";
