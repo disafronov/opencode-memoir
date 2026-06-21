@@ -37,9 +37,11 @@ export async function handleToolExecuteAfter(input: unknown, output: unknown): P
     // Per-session state key
     const sid = typedInput?.sessionID ?? "default";
 
+    // Early exit when capture is fully disabled
+    if (process.env.MEMOIR_NO_CAPTURE === "1") return;
+
     // Accumulate per-tool metrics (cf. collect-metrics.sh).
-    // Skipped when MEMOIR_NO_CAPTURE or MEMOIR_NO_METRICS is set.
-    if (process.env.MEMOIR_NO_CAPTURE !== "1" && process.env.MEMOIR_NO_METRICS !== "1") {
+    if (process.env.MEMOIR_NO_METRICS !== "1") {
       const calls = 1;
       const errors =
         typedOutput?.metadata?.error || typedOutput?.output?.startsWith("Error:") ? 1 : 0;
@@ -47,9 +49,7 @@ export async function handleToolExecuteAfter(input: unknown, output: unknown): P
     }
 
     // Track file edits (cf. collect-edits.sh).
-    // Skipped when MEMOIR_NO_CAPTURE or MEMOIR_NO_CODE_SUMMARY is set.
     if (
-      process.env.MEMOIR_NO_CAPTURE !== "1" &&
       process.env.MEMOIR_NO_CODE_SUMMARY !== "1" &&
       EDIT_TOOLS.has(typedInput?.tool ?? "")
     ) {
