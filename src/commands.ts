@@ -58,11 +58,9 @@ export async function handleCommandExecuteBefore(
   try {
     if (input.command === "memoir:status") {
       pushText(output, await statusJson(storeRoot));
-    }
-    if (input.command === "memoir:ui") {
+    } else if (input.command === "memoir:ui") {
       pushText(output, await launchUi(storeRoot));
-    }
-    if (input.command === "memoir:remember") {
+    } else if (input.command === "memoir:remember") {
       const args = (input as { arguments?: string }).arguments;
       if (args && isSecretSanitizationEnabled() && SECRET_PATTERN.test(args)) {
         pushText(
@@ -70,8 +68,7 @@ export async function handleCommandExecuteBefore(
           "Memoir: cannot remember content that matches secret patterns. Please remove sensitive data and try again.",
         );
       }
-    }
-    if (input.command === "memoir:unmerged") {
+    } else if (input.command === "memoir:unmerged") {
       pushText(output, await unmergedBranchesText(storeRoot));
     }
   } catch (error) {
