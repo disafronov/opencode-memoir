@@ -20,6 +20,9 @@ const UI_URL_DEADLINE_MS = 5_000;
 /** Polling interval (ms) for UI URL detection. */
 const UI_URL_POLL_MS = 100;
 
+/** Max buffer size for UI output capture (256 KB). */
+const UI_OUTPUT_MAX_BYTES = 256 * 1_024;
+
 /** Ensure the memoir store exists, returning an error message on failure. */
 export async function ensureStoreOrError(store: string): Promise<string | null> {
   try {
@@ -94,10 +97,10 @@ export async function launchUi(store: string): Promise<string> {
 
     let output = "";
     child.stdout?.on("data", (chunk) => {
-      output += String(chunk);
+      if (output.length < UI_OUTPUT_MAX_BYTES) output += String(chunk);
     });
     child.stderr?.on("data", (chunk) => {
-      output += String(chunk);
+      if (output.length < UI_OUTPUT_MAX_BYTES) output += String(chunk);
     });
 
     const spawnFailed = new Promise<string | null>((resolve) => {
@@ -112,9 +115,15 @@ export async function launchUi(store: string): Promise<string> {
 
     child.unref();
 
+    // Early-exit flag: process died before URL was found
+    let childExited = false;
+    child.once("exit", () => {
+      childExited = true;
+    });
+
     const urlPattern = /https?:\/\/(?:localhost|127\.0\.0\.1):\d+\S*/;
     const deadline = Date.now() + UI_URL_DEADLINE_MS;
-    while (Date.now() < deadline) {
+    while (Date.now() < deadline && !childExited) {
       const match = output.match(urlPattern);
       if (match) {
         const url = match[0];
@@ -132,7 +141,14 @@ export async function launchUi(store: string): Promise<string> {
       await new Promise((resolve) => setTimeout(resolve, UI_URL_POLL_MS));
     }
 
-    return `Memoir UI started with ${spec.label} (pid ${child.pid ?? "unknown"}), but URL was not detected yet.\n${output.trim()}`.trim();
+    if (childExited) {
+      lastError =
+        `${spec.label}: process exited before URL was detected. Output: ${output.slice(0, 500)}`.trim();
+      continue;
+    }
+
+    const msg = `Memoir UI started with ${spec.label} (pid ${child.pid ?? "unknown"}), but URL was not detected yet.\n${output.trim()}`;
+    return msg.trim();
   }
 
   return `Memoir UI failed to start: ${lastError || "no launcher succeeded"}`;
