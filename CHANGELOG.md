@@ -1,3 +1,13 @@
+## [1.1.8](https://github.com/disafronov/opencode-memoir/compare/v1.1.7...v1.1.8) (2026-06-23)
+
+### Bug Fixes
+
+* **ci:** remove unused taxonomyFetchPromise variable ([9dbf13c](https://github.com/disafronov/opencode-memoir/commit/9dbf13c7f8933a4bf644bed67cc4bd586a57a06a))
+* **memoir-ops:** add HOME/USER to launchUi env and parallelize unmergedBranchesText ([1578c7c](https://github.com/disafronov/opencode-memoir/commit/1578c7cd0beac8181671c3478fe03ad66ad07f22))
+* session-context race guard, launchUi resource safety, commands if/else if ([57ac755](https://github.com/disafronov/opencode-memoir/commit/57ac7551ff85a9581a110ce920a26c4458b7af7d))
+* **store:** add deriveStorePath caching and FIFO cache eviction ([3af8286](https://github.com/disafronov/opencode-memoir/commit/3af82860a798ec60dd465f6e1a12d70dba500501))
+* **tools:** preserve successful namespace results on partial recall failure ([1c89ef7](https://github.com/disafronov/opencode-memoir/commit/1c89ef722d9d6d523f706ea532bcfabfed895522))
+
 ## [1.1.7](https://github.com/disafronov/opencode-memoir/compare/v1.1.6...v1.1.7) (2026-06-17)
 
 ### Bug Fixes
