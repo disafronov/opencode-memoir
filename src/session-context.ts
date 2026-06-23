@@ -8,7 +8,6 @@ let initContext: string | null = null;
 let initContextFetched = false;
 const MAX_TAXONOMY_RETRIES = 3;
 let taxonomyFetchRetries = 0;
-let taxonomyFetchPromise: Promise<void> | null = null;
 /**
  * Tracks sessions that have received initial context injection.
  * Uses a Map with timestamp so stale entries can be evicted.
@@ -47,17 +46,15 @@ export async function handleEvent(
 ): Promise<void> {
   if (input.event.type === "session.created" && !initContextFetched) {
     initContextFetched = true;
-    taxonomyFetchPromise = fetchTaxonomy(storeRoot).catch((e: unknown) => {
+    fetchTaxonomy(storeRoot).catch((e: unknown) => {
       debugLog("event: taxonomy fetch failed, will retry on next session:", errorMessage(e));
       taxonomyFetchRetries++;
       if (taxonomyFetchRetries >= MAX_TAXONOMY_RETRIES) {
         debugLog("memoir: taxonomy fetch failed after max retries, giving up");
-        taxonomyFetchPromise = null;
         return;
       }
       // Allow a later session to retry — the store may not have been ready yet.
       initContextFetched = false;
-      taxonomyFetchPromise = null;
     });
   }
 }
@@ -73,7 +70,6 @@ async function fetchTaxonomy(storeRoot: string): Promise<void> {
   const pretty = tryPrettyJson(taxonomyResult.stdout);
   initContext = `[memoir] Available taxonomy paths:\n${pretty}`;
   taxonomyFetchRetries = 0;
-  taxonomyFetchPromise = null;
 }
 
 export async function handleSystemTransform(input: unknown, output: unknown): Promise<void> {
