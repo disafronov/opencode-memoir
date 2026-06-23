@@ -49,10 +49,7 @@ export async function handleToolExecuteAfter(input: unknown, output: unknown): P
     }
 
     // Track file edits (cf. collect-edits.sh).
-    if (
-      process.env.MEMOIR_NO_CODE_SUMMARY !== "1" &&
-      EDIT_TOOLS.has(typedInput?.tool ?? "")
-    ) {
+    if (process.env.MEMOIR_NO_CODE_SUMMARY !== "1" && EDIT_TOOLS.has(typedInput?.tool ?? "")) {
       const args = typedInput?.args ?? {};
       const filePath =
         typeof args.filePath === "string"
