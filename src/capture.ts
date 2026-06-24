@@ -162,7 +162,7 @@ const flushQueues = new Map<string, Promise<void>>();
 
 async function acquireFlushLock(store: string): Promise<() => void> {
   const prev = flushQueues.get(store) ?? Promise.resolve();
-  let release: () => void;
+  let release!: () => void;
   const next = new Promise<void>((resolve) => {
     release = resolve;
   });
