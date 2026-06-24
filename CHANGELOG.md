@@ -1,3 +1,10 @@
+## [1.1.9](https://github.com/disafronov/opencode-memoir/compare/v1.1.8...v1.1.9) (2026-06-24)
+
+### Bug Fixes
+
+* eliminate TOCTOU race in ensureStore via Promise-chain mutex ([8886c15](https://github.com/disafronov/opencode-memoir/commit/8886c15a9e2c0d95500508c799a4f7bb1e168910))
+* resolve TS2454 in acquireFlushLock — non-null assertion for release variable ([c71d101](https://github.com/disafronov/opencode-memoir/commit/c71d10112675e8d53f9fa0abdf1e039eef313c37))
+
 ## [1.1.8](https://github.com/disafronov/opencode-memoir/compare/v1.1.7...v1.1.8) (2026-06-23)
 
 ### Bug Fixes
