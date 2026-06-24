@@ -204,19 +204,25 @@ const ENSURED_STORES_MAX = 200;
 /** Cache of stores already verified or created — avoids redundant access() + CLI calls. */
 export const ensuredStores = new Set<string>();
 
-/**
- * Stores currently being created — prevents concurrent `memoir new` on
- * the same path (C5 fix).
- */
-const storeCreations = new Map<string, Promise<void>>();
+/** Serializes store creation — prevents concurrent `memoir new` on the same path. */
+const storeCreateQueues = new Map<string, Promise<void>>();
 
 export async function ensureStore(store: string): Promise<void> {
   if (ensuredStores.has(store)) return;
 
-  // If another caller is already creating this store, await it
-  const inFlight = storeCreations.get(store);
-  if (inFlight) {
-    await inFlight;
+  // Serialize store creation — Promise-chain mutex (reserve BEFORE any async I/O)
+  const prev = storeCreateQueues.get(store) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  storeCreateQueues.set(store, next);
+  await prev;
+
+  // Double-check after acquiring queue slot
+  if (ensuredStores.has(store)) {
+    release();
+    if (storeCreateQueues.get(store) === next) storeCreateQueues.delete(store);
     return;
   }
 
@@ -227,7 +233,7 @@ export async function ensureStore(store: string): Promise<void> {
       const first = ensuredStores.keys().next().value;
       if (first !== undefined) ensuredStores.delete(first);
     }
-    return; // already exists
+    return;
   } catch {
     // ensure parent dir exists (memoir new doesn't create intermediate dirs)
     await mkdir(join(store, ".."), { recursive: true }).catch((e: unknown) =>
@@ -240,7 +246,7 @@ export async function ensureStore(store: string): Promise<void> {
     const tmpDir = join(tmpdir(), `memoir-scratch-${Date.now()}`);
     try {
       await mkdir(tmpDir, { recursive: true });
-      await execFileAsync("git", ["init", "-q", tmpDir], { timeout: 5000 });
+      await execFileAsync("git", ["init", "-q", tmpDir], { timeout: 5_000 });
       const result = await runMemoir(["new", store, "--taxonomy-builtin"], { cwd: tmpDir });
       if (!result.ok) {
         throw new Error(result.error);
@@ -259,11 +265,11 @@ export async function ensureStore(store: string): Promise<void> {
       );
     }
   })();
-  storeCreations.set(store, creationPromise);
   try {
     await creationPromise;
   } finally {
-    storeCreations.delete(store);
+    release();
+    if (storeCreateQueues.get(store) === next) storeCreateQueues.delete(store);
   }
 }
 
