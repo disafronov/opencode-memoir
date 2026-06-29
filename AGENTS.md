@@ -18,7 +18,7 @@ npm run lint:fix       # biome check --write src/ tests/
 npm run format         # biome format --write src/ tests/
 
 # Single test file
-npx tsx --test tests/recall-gate.test.ts
+npx tsx --test tests/store.test.ts
 
 # Full verification (what CI runs)
 # lint_and_test.yaml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
@@ -61,12 +61,21 @@ All optional:
 
 - `MEMOIR_DEBUG=1` — Debug logging to stderr (`[memoir]` prefix)
 - `MEMOIR_STORE` — Override store path (passed as `--store` to memoir-mcp)
-- `MEMOIR_AUTO_SAVE=0` — Disable auto-save on completion/dispose (default: enabled)
+- `MEMOIR_AUTO_SAVE=1` — Auto-save session marker on completion/dispose (default: disabled)
 - `MEMOIR_REMINDER_INTERVAL=N` — Periodic reminder every N messages (default: 5, 0 to disable)
 
 ## Tests
 
-No test files currently. The recall-gate tests were removed when the gate was removed in favor of simpler prompt-based recall guidance.
+4 test files, 31 tests total — Node built-in test runner via `tsx --test`.
+
+| File | Tests | What it covers |
+|------|------:|----------------|
+| `tests/store.test.ts` | 11 | `deriveStorePath` (5), `currentGitBranch` (1), `branchCache` (3), `callMemoir` (1) |
+| `tests/memory-saver.test.ts` | 7 | `incrementMsgCount` (3), `shouldRemind` (3), `pruneAll` (1) |
+| `tests/index.test.ts` | 10 | Module shape (1), hook registration & behavior (9) |
+| `tests/debug.test.ts` | 3 | `MEMOIR_DEBUG` gating |
+
+Missing coverage: `autoMatchMemoirBranch` integration, startup hint idempotency.
 
 ## Build Pipeline
 

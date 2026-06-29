@@ -43,14 +43,18 @@ All optional:
 |---|---|
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Emit diagnostic logs to stderr (prefixed `[memoir]`) |
+| `MEMOIR_AUTO_SAVE=1` | Auto-save session marker on dispose (default: disabled) |
+| `MEMOIR_REMINDER_INTERVAL=N` | Periodic save/recall reminder every N messages (default: 5, 0 to disable) |
 
 ## Hooks
 
 | Hook | Purpose |
 |---|---|
-| `chat.message` | Runs recall gate — detects when user context might benefit from memoir |
-| `experimental.chat.system.transform` | Injects recall hint when the gate triggers |
-| `dispose` | Clears pending recall state |
+| `config` | Registers `memoir-mcp` as a dynamic MCP server; adds `/memoir:onboard` slash command |
+| `shell.env` | Injects `MEMOIR_STORE` into shell environment |
+| `chat.message` | Increments message counter; auto-matches memoir branch to current git branch |
+| `experimental.chat.system.transform` | Startup hint (once/session); periodic save/recall reminder |
+| `dispose` | Optionally saves session marker; clears all pending state |
 
 ## How it works
 
@@ -75,9 +79,10 @@ npm test         # run the test suite
 
 | File | Responsibility |
 |---|---|
-| `src/index.ts` | Plugin entry: MCP registration + hooks |
-| `src/recall-gate.ts` | Recall-gate trigger logic |
-| `src/debug.ts` | Shared debug logger |
+| `src/index.ts` | Plugin entry: MCP registration + all hooks + dispose |
+| `src/store.ts` | Store path derivation, branch auto-match, `callMemoir` CLI helper |
+| `src/memory-saver.ts` | Per-session message counter for periodic reminders |
+| `src/debug.ts` | Conditional stderr logger (`MEMOIR_DEBUG=1`) |
 
 ## Publishing
 
