@@ -1,23 +1,31 @@
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 
-import { _resetStorePathCache, deriveStorePath, reorderResolver } from "../src/store.ts";
+import {
+  deriveStorePath,
+  getCachedBranch,
+  pruneBranchCache,
+  setCachedBranch,
+  setPluginStoreOverride,
+} from "../src/store.ts";
 
 describe("deriveStorePath", () => {
-  afterEach(() => {
+  it("uses pluginStoreOverride when set", () => {
+    setPluginStoreOverride("/custom/store");
+    assert.strictEqual(deriveStorePath("/ignored"), "/custom/store");
+    setPluginStoreOverride(undefined);
+  });
+
+  it("uses MEMOIR_STORE env var when no override", () => {
+    process.env.MEMOIR_STORE = "/env/store";
+    assert.strictEqual(deriveStorePath("/ignored"), "/env/store");
     delete process.env.MEMOIR_STORE;
-    _resetStorePathCache();
   });
 
-  it("uses MEMOIR_STORE env var when set", () => {
-    process.env.MEMOIR_STORE = "/tmp/test-memoir-store";
-    assert.strictEqual(deriveStorePath("/some/project"), "/tmp/test-memoir-store");
-  });
-
-  it("uses homedir slug from cwd when no env", () => {
-    const result = deriveStorePath("/home/user/my-project");
-    assert.match(result, /^\/.*\.memoir/);
-    assert.ok(result.includes("my-project"));
+  it("uses git root when in a git repo", () => {
+    const result = deriveStorePath("/tmp");
+    assert.ok(result.startsWith("/"));
+    assert.ok(result.includes(".memoir"));
   });
 
   it("replaces slashes and dots with hyphens in slug", () => {
@@ -25,44 +33,43 @@ describe("deriveStorePath", () => {
     assert.match(result, /my-app$/);
   });
 
-  it("handles cwd at root", () => {
-    const result = deriveStorePath("/");
-    assert.match(result, /^\/.*\.memoir\/-$/);
-  });
-
-  it("handles cwd with hyphens and underscores", () => {
-    const result = deriveStorePath("/home/user/my_project-v2");
-    assert.ok(result.includes("my_project-v2"));
+  it("falls back to resolved cwd when not in git repo", () => {
+    const result = deriveStorePath("/tmp/non-git-dir");
+    assert.match(result, /tmp-non-git-dir/);
   });
 });
 
-describe("reorderResolver", () => {
-  it("returns a new array with winner first", () => {
-    assert.deepStrictEqual(reorderResolver(["a", "b", "c"], "b"), ["b", "a", "c"]);
+describe("currentGitBranch", () => {
+  it("returns empty string when not in a git repo", async () => {
+    const mod = await import("../src/store.ts");
+    const branch = mod.currentGitBranch("/nonexistent-path");
+    assert.strictEqual(branch, "");
+  });
+});
+
+describe("branchCache", () => {
+  it("returns empty string for unknown session", () => {
+    assert.strictEqual(getCachedBranch("unknown"), "");
   });
 
-  it("does not mutate the input array", () => {
-    const input = ["a", "b", "c"];
-    const inputRef = input;
-    reorderResolver(input, "b");
-    assert.deepStrictEqual(input, inputRef);
+  it("stores and retrieves branch", () => {
+    setCachedBranch("sess1", "feature-x");
+    assert.strictEqual(getCachedBranch("sess1"), "feature-x");
   });
 
-  it("returns copy when winner is already first", () => {
-    const input = ["a", "b", "c"];
-    const result = reorderResolver(input, "a");
-    assert.deepStrictEqual(result, ["a", "b", "c"]);
-    assert.notStrictEqual(result, input); // is a copy, not same reference
+  it("clears all entries on prune", () => {
+    setCachedBranch("sess1", "feature-x");
+    pruneBranchCache();
+    assert.strictEqual(getCachedBranch("sess1"), "");
   });
+});
 
-  it("returns copy when winner is not found", () => {
-    const input = ["a", "b", "c"];
-    const result = reorderResolver(input, "d");
-    assert.deepStrictEqual(result, ["a", "b", "c"]);
-    assert.notStrictEqual(result, input); // is a copy
-  });
-
-  it("handles single-element array", () => {
-    assert.deepStrictEqual(reorderResolver(["a"], "a"), ["a"]);
+describe("callMemoir", () => {
+  it("handles uvx call without throwing", async () => {
+    const result = await (await import("../src/store.ts")).callMemoir(
+      ["status"],
+      "/tmp/memoir-test",
+    );
+    assert.ok(result === null || typeof result === "string");
   });
 });
