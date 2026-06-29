@@ -113,7 +113,7 @@ Then call memoir_remember with replace=true for durable onboarding facts. Use na
 
     dispose: async (): Promise<void> => {
       try {
-        if (process.env.MEMOIR_AUTO_SAVE !== "0") {
+        if (process.env.MEMOIR_AUTO_SAVE === "1") {
           for (const [sid, count] of sessionMsgCount) {
             await callMemoir(
               [

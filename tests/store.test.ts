@@ -42,8 +42,7 @@ describe("deriveStorePath", () => {
 describe("currentGitBranch", () => {
   it("returns empty string when not in a git repo", async () => {
     const mod = await import("../src/store.ts");
-    const branch = mod.currentGitBranch("/nonexistent-path");
-    assert.strictEqual(branch, "");
+    assert.strictEqual(mod.currentGitBranch("/nonexistent-path"), "");
   });
 });
 
@@ -65,7 +64,7 @@ describe("branchCache", () => {
 });
 
 describe("callMemoir", () => {
-  it("handles uvx call without throwing", async () => {
+  it("returns null when uvx fails", async () => {
     const result = await (await import("../src/store.ts")).callMemoir(
       ["status"],
       "/tmp/memoir-test",
