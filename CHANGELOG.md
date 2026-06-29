@@ -1,3 +1,9 @@
+## [2.0.3](https://github.com/disafronov/opencode-memoir/compare/v2.0.2...v2.0.3) (2026-06-29)
+
+### Bug Fixes
+
+* update MCP tool names to memoir_memoir_ prefix (double prefix) ([31d6d31](https://github.com/disafronov/opencode-memoir/commit/31d6d31dc56520134344b530fdcb609dca181d20))
+
 ## [2.0.2](https://github.com/disafronov/opencode-memoir/compare/v2.0.1...v2.0.2) (2026-06-29)
 
 ### Bug Fixes
