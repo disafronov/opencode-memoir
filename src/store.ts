@@ -100,7 +100,7 @@ export async function autoMatchMemoirBranch(store: string, sessionID: string): P
     const data = JSON.parse(branchResult);
     const branches: string[] = data?.branches ?? [];
     if (!branches.includes(codeBranch)) {
-      await callMemoir(["branch", codeBranch, "--from", "main"], store);
+      await callMemoir(["branch", codeBranch], store);
     }
     await callMemoir(["checkout", codeBranch], store);
     setCachedBranch(sessionID, codeBranch);
