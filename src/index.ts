@@ -46,7 +46,7 @@ Memory rules:
 - Do not use preferences.* paths unless the user explicitly stated a preference.
 - If a fact is your interpretation, do not save it; report it as uncertain instead.
 
-Then call memoir_remember with replace=true for durable onboarding facts. Use namespace codebase:onboard in git repositories and project:onboard outside git.`,
+Then call memoir_memoir_remember with replace=true for durable onboarding facts. Use namespace codebase:onboard in git repositories and project:onboard outside git.`,
       };
 
       // Register memoir MCP server
@@ -96,14 +96,14 @@ Then call memoir_remember with replace=true for durable onboarding facts. Use na
         if (input.sessionID && !sessionsWithStartupHint.has(sid)) {
           sessionsWithStartupHint.add(sid);
           output.system?.unshift(
-            '[memoir] You have Memoir MCP tools (memoir_recall, memoir_remember, memoir_get, memoir_summarize, memoir_status, memoir_branches, memoir_checkout).\nSAVE (memoir_remember) after: task completion, user stating preferences/constraints, discovering project facts. RECALL (memoir_recall \u2192 memoir_get) at session start for prior context, when user asks about prior work.\nNamespaces: "default" (user context), "codebase:onboard" (project facts in git repos). Taxonomy paths: preferences.*, project.*, codebase.*, decisions.*, learning.*.',
+            '[memoir] You have Memoir MCP tools (memoir_memoir_recall, memoir_memoir_remember, memoir_memoir_get, memoir_memoir_summarize, memoir_memoir_status, memoir_memoir_branches, memoir_memoir_checkout).\nSAVE (memoir_memoir_remember) after: task completion, user stating preferences/constraints, discovering project facts. RECALL (memoir_memoir_recall \u2192 memoir_memoir_get) at session start for prior context, when user asks about prior work.\nNamespaces: "default" (user context), "codebase:onboard" (project facts in git repos). Taxonomy paths: preferences.*, project.*, codebase.*, decisions.*, learning.*.',
           );
         }
 
         const count = sessionMsgCount.get(sid) ?? 0;
         if (shouldRemind(count)) {
           output.system?.push(
-            "\n[memoir] Reminder: Use memoir_remember to save context, memoir_recall to retrieve prior context.",
+            "\n[memoir] Reminder: Use memoir_memoir_remember to save context, memoir_memoir_recall to retrieve prior context.",
           );
         }
       } catch (e) {
