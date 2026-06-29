@@ -1,3 +1,13 @@
+## [2.0.0](https://github.com/disafronov/opencode-memoir/compare/v1.1.9...v2.0.0) (2026-06-29)
+
+### ⚠ BREAKING CHANGES
+
+* memoir MCP
+
+### Features
+
+* memoir MCP ([0e45c6e](https://github.com/disafronov/opencode-memoir/commit/0e45c6e531b8146e7b668a151d960d59ab94b12f))
+
 ## [1.1.9](https://github.com/disafronov/opencode-memoir/compare/v1.1.8...v1.1.9) (2026-06-24)
 
 ### Bug Fixes
