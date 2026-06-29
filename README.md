@@ -21,7 +21,7 @@ OpenCode downloads and resolves the package from npm automatically; no manual in
 ## Quick start
 
 1. Install the plugin (see above)
-2. Start coding — the agent can use `memoir_recall`, `memoir_remember`, `memoir_get` MCP tools automatically
+2. Start coding — the agent can use `memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get` MCP tools automatically
 
 ## Store configuration
 
@@ -58,7 +58,7 @@ All optional:
 
 ## How it works
 
-Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a dynamic MCP server. OpenCode starts the server via `uvx --from memoir-ai[mcp] memoir-mcp`, and all memoir tools (`memoir_recall`, `memoir_remember`, `memoir_get`, etc.) are available natively to the LLM.
+Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a dynamic MCP server. OpenCode starts the server via `uvx --from memoir-ai[mcp] memoir-mcp`, and all memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the LLM.
 
 ## Development
 
