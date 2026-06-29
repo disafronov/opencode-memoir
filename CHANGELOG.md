@@ -1,3 +1,9 @@
+## [2.0.2](https://github.com/disafronov/opencode-memoir/compare/v2.0.1...v2.0.2) (2026-06-29)
+
+### Bug Fixes
+
+* remove hardcoded --from main in autoMatchMemoirBranch ([9c688b8](https://github.com/disafronov/opencode-memoir/commit/9c688b81a20fc25bf97090a6b6044ee1d393e6d4))
+
 ## [2.0.1](https://github.com/disafronov/opencode-memoir/compare/v2.0.0...v2.0.1) (2026-06-29)
 
 ### Bug Fixes
