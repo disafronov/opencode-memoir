@@ -21,29 +21,36 @@ npm run format         # biome format --write src/ tests/
 npx tsx --test tests/recall-gate.test.ts
 
 # Full verification (what CI runs)
-npm run lint && npm run typecheck && npm run build && npm test
+# lint_and_test.yaml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
 ```
 
-**Biome** is the linter and formatter (`@biomejs/biome`). CI runs `biome ci src/ tests/` which is stricter than `biome check`.
+**Biome** is the linter and formatter (`@biomejs/biome`). CI runs `npx biome ci src/ tests/` which is stricter than `biome check`. VCS integration reads `.gitignore` + `.ignore`.
 
 ## Architecture Essentials
 
 ### Plugin Format (V1 Module - Critical)
 
-`src/index.ts` must export **only** `default` as `{ id: 'opencode-memoir', server: MemoirOpenCode }`. Named exports crash OpenCode's loader.
+`src/index.ts` exports only `default` as `{ id: 'opencode-memoir', server: MemoirOpenCode }`. Named exports crash OpenCode's loader.
 
 ### Plugin Factory Pattern
 
-`MemoirOpenCode` is an async function returning an object with hooks/tools. Store path is cached once at init (avoid repeated `execFileSync`).
+`MemoirOpenCode` returns an object with hooks/tools. Store path is cached once at init (avoid repeated `execFileSync`).
 
-### Key Files
+### Source Layout
 
-- `src/index.ts` - Plugin entry: tools, hooks, commands (534 lines)
-- `src/store.ts` - CLI resolution, git integration, store paths (~350 lines)
-- `src/capture.ts` - Edit tracking, metrics, flush with mutex (~288 lines)
-- `src/recall-gate.ts` - Secret pattern detection, recall triggers (~67 lines)
-- `src/utils.ts` - SECRET_PATTERN, errorMessage, coercePaths (45 lines). **Must NOT be exported from index.ts** (OpenCode loader treats every export as a plugin)
-- `src/debug.ts` - Conditional debug logger (`MEMOIR_DEBUG=1`, 9 lines)
+| File | Lines | Role |
+|------|------:|------|
+| `src/store.ts` | 473 | CLI resolution (`memoir`/`uvx`/`uv` fallback), `deriveStorePath()`, `ensureStore()`, `runMemoir()`, git/worktree helpers, branch auto-match |
+| `src/capture.ts` | 360 | `flushCapture()` (read-merge-write of `metrics.code.*` / `metrics.turn.*`), per-session edit/metrics state, Promise-chain mutex |
+| `src/memoir-ops.ts` | 191 | `statusJson()`, `launchUi()` (spawns detached process, polls for URL), `unmergedBranchesText()` |
+| `src/tools.ts` | 160 | `memoir_status`, `memoir_remember`, `memoir_recall`, `memoir_get` tool definitions via `@opencode-ai/plugin` |
+| `src/capture-hooks.ts` | 125 | Hook wiring: `shell.env` (injects `MEMOIR_STORE`), `tool.execute.after` (metrics + edits), `chat.message` (recall gate + auto-match branch + flush) |
+| `src/index.ts` | 116 | Plugin entry: tool registration, all 8 hooks, dispose cleanup |
+| `src/session-context.ts` | 103 | Background taxonomy fetch on `session.created`, system prompt injection for taxonomy context + recall instruction |
+| `src/commands.ts` | 77 | Slash command registration (`/memoir:status`, `:ui`, `:remember`, `:recall`, `:onboard`, `:unmerged`), secret sanitization in `/memoir:remember` |
+| `src/recall-gate.ts` | 72 | `shouldTriggerRecall()` — positive-list pattern gate mirroring Claude Code's UserPromptSubmit logic |
+| `src/utils.ts` | 45 | `SECRET_PATTERN`, `errorMessage()`, `coercePaths()`, `MEMOIR_GET_MAX_KEYS`. **Must NOT be re-exported from index.ts** |
+| `src/debug.ts` | 9 | Conditional stderr logger (`MEMOIR_DEBUG=1`) |
 
 ## Conventions
 
@@ -63,46 +70,50 @@ npm run lint && npm run typecheck && npm run build && npm test
 
 ### Module-Level State
 
-- ES module imports are read-only bindings
-- Use setter functions for mutable state (see `setPluginStoreOverride()`)
+- ES module imports are read-only bindings — use setter functions for mutable state (e.g., `setPluginStoreOverride()`, `setStoreTestOverrides()`, `setCliOverrides()`)
 - Internal module mutations (`let` at module scope) work fine
 
 ### Caching Patterns
 
-- Size-based eviction with `.clear()` on overflow
-- FIFO eviction via `evictOldest()` (deletes first Map key)
-- Concurrency control via Promise-chain mutex in `capture.ts`
+- Size-based eviction with `.clear()` or FIFO via `evictOldest()` (deletes first Map/Set key)
+- TTL-based eviction in `_noGitCache` (5 min) and `branchMatchCache` (5s)
+- Concurrency control via Promise-chain mutex in `capture.ts` (`flushQueues`) and `store.ts` (`storeCreateQueues`)
 
 ## Gotchas
 
-1. **`runMemoir` never throws** - Returns error strings starting with `"Memoir command failed"`. Check with `.startsWith()`.
-2. **Recall gate timing** - Must run synchronously before any `await` in `chat.message` hook (C4 comment in code).
-3. **`pushText` replaces, not appends** - Clears all existing parts (`output.parts.length = 0`).
-4. **`execFileSync` blocks ~3s** - `deriveStorePath()` runs once at init, then cached.
-5. **Conventional Commits required** - Only `feat:`, `fix:`, `perf:`, `revert:`, `refactor:` trigger releases.
-6. **Tests excluded from tsc** - `tsconfig.json` include is `src/**/*.ts` only; tests compile separately via `tsx --test`.
+1. **`runMemoir` never throws** — Returns `{ ok: true, stdout } | { ok: false, error }`. Check `.ok`.
+2. **Recall gate timing** — `chat.message` hook runs `shouldTriggerRecall()` synchronously before any `await` (C4 comment in `capture-hooks.ts:84`).
+3. **`pushText` replaces, not appends** — Clears all existing parts (`output.parts.length = 0`) in `commands.ts`.
+4. **`execFileSync` blocks ~3s** — `deriveStorePath()` runs once at init, then cached.
+5. **Store creation in non-git dirs** — `ensureStore()` creates a scratch git directory before `memoir new` (the `.git` requirement of prolly-tree).
+6. **Conventional Commits required** — Only `feat:`, `fix:`, `perf:`, `revert:`, `refactor:` produce releases. `docs:`/`test:`/`chore:` etc. do not.
+7. **Tests excluded from tsc** — `tsconfig.json` `include` is `src/**/*.ts` only; tests compile via `tsx --test`.
+8. **`captureTest` tests require `memoir` CLI** — `tests/capture.test.ts` and `tests/store-async.test.ts` mock CLI but still need `ensureStore`. `tests/integration.test.ts` self-skips when CLI unavailable.
 
 ## Environment Variables
 
-All optional, feature flags:
+All optional, on by default:
 
-- `MEMOIR_DEBUG=1` - Enable debug logging to stderr
-- `MEMOIR_NO_CAPTURE=1` - Disable all capture
-- `MEMOIR_NO_METRICS=1` - Disable tool metrics
-- `MEMOIR_NO_CODE_SUMMARY=1` - Disable edit recording
-- `MEMOIR_SANITIZE_SECRETS=0` - Disable secret pattern blocking (default ON)
-- `MEMOIR_STORE` - Override store path
+- `MEMOIR_DEBUG=1` — Debug logging to stderr (`[memoir]` prefix)
+- `MEMOIR_NO_CAPTURE=1` — Disable all capture (metrics + edits + auto-match + flush)
+- `MEMOIR_NO_METRICS=1` — Disable per-tool metrics only
+- `MEMOIR_NO_CODE_SUMMARY=1` — Disable edit recording only
+- `MEMOIR_SANITIZE_SECRETS=0` — Disable secret pattern blocking (default ON)
+- `MEMOIR_STORE` — Override store path
 
 ## Build Pipeline
 
 Two-stage build:
-1. `tsc --declaration --emitDeclarationOnly` - Type declarations only
-2. `esbuild` - Bundled ESM, `node:*` and `@opencode-ai/plugin` externalized
+1. `tsc --declaration --emitDeclarationOnly` — Type declarations
+2. `esbuild` — Bundled ESM, `node:*` and `@opencode-ai/plugin` externalized
 
-`prepublishOnly` runs smoke test verifying V1 module shape `{ id, server }`.
+`prepublishOnly` runs build + test + smoke check (validates V1 module `{ id, server }` shape).
 
 ## CI/CD
 
-- PRs: `lint_and_test.yaml` (Biome lint + typecheck → Node 24/26 test matrix)
-- Main/release pushes: `semantic.yaml` (semantic-release)
-- Version tags: `publish-npm.yaml` (npm trusted publishing)
+- **PRs**: `lint_and_test.yaml` — `biome ci` → `typecheck` → `build` → `test` (Node 24/26 matrix)
+- **PRs + schedule**: `audit.yaml` — `npm audit --audit-level=high` (Node 20/22)
+- **Push to main (non-release commits)**: `semantic.yaml` release job — runs semantic-release via Docker (`ghcr.io/disafronov/semantic-release:latest`), updates CHANGELOG, tags `vx.y.z`
+- **Push to release**: `semantic.yaml` release job + sync back to main (ff or rebase)
+- **Push to main (release commits)**: `semantic.yaml` rebase job — rebases all non-draft non-deps PRs onto main
+- **Version tags (`v*`)**: `publish-npm.yaml` — `npm publish --provenance --access public`
