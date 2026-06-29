@@ -1,3 +1,9 @@
+## [2.0.1](https://github.com/disafronov/opencode-memoir/compare/v2.0.0...v2.0.1) (2026-06-29)
+
+### Bug Fixes
+
+* invert MEMOIR_AUTO_SAVE default to disabled; update docs and tests ([4573248](https://github.com/disafronov/opencode-memoir/commit/457324882f4a0badaab987944a209c72c08eae7e))
+
 ## [2.0.0](https://github.com/disafronov/opencode-memoir/compare/v1.1.9...v2.0.0) (2026-06-29)
 
 ### ⚠ BREAKING CHANGES
