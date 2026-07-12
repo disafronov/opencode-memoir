@@ -26,12 +26,22 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
     mcpCommand.push("--store", storePath);
   }
 
+  const mcpServer = {
+    type: "local" as const,
+    command: mcpCommand,
+    environment: storePath ? { MEMOIR_STORE: storePath } : undefined,
+  };
+
   const hooks: Record<string, unknown> = {
     name: "memoir",
 
     config: async (config: Config): Promise<void> => {
       debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
       debugLog("config hook: mcpCommand length =", mcpCommand.length);
+
+      const mcp = config.mcp ?? {};
+      mcp.memoir = mcpServer;
+      config.mcp = mcp;
 
       config.command = config.command ?? {};
       config.command["memoir:onboard"] = {
@@ -52,17 +62,7 @@ Memory rules:
 Then call memoir_memoir_remember with replace=true for durable onboarding facts. Use namespace codebase:onboard in git repositories and project:onboard outside git.`,
       };
 
-      // Register memoir MCP server
-      const mcp = config.mcp ?? {};
-      mcp.memoir = {
-        type: "local" as const,
-        command: mcpCommand,
-        environment: storePath ? { MEMOIR_STORE: storePath } : undefined,
-        enabled: true,
-      };
-      config.mcp = mcp;
-
-      debugLog("config hook: registered mcp.memoir.command =", JSON.stringify(mcp.memoir?.command));
+      debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
     },
 
     "shell.env": async (
@@ -140,6 +140,8 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
       pruneAll();
     },
   };
+
+  hooks.mcp = { memoir: mcpServer };
 
   return hooks;
 };

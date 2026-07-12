@@ -55,13 +55,12 @@ describe("MemoirOpenCode factory", () => {
     );
   });
 
-  it("config hook registers mcp server", async () => {
+  it("returns top-level mcp server (memoir)", async () => {
     const hooks = await plugin.server(undefined, {});
-    const config: { mcp?: Record<string, unknown> } = {};
-    await hooks.config(config);
-    assert.ok(config.mcp);
-    assert.ok(config.mcp.memoir);
-    const mcpServer = config.mcp.memoir as {
+    const mcp = (hooks as { mcp?: Record<string, unknown> }).mcp;
+    assert.ok(mcp);
+    assert.ok(mcp.memoir);
+    const mcpServer = mcp.memoir as {
       type: string;
       command: string[];
       environment?: Record<string, string>;
