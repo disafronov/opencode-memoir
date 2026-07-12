@@ -4,6 +4,9 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { debugLog } from "./debug.js";
 
+/** Python version pinned for uvx to avoid litellm build failure on 3.14+. */
+export const UVX_PYTHON = "3.13" as const;
+
 const execFileAsync = promisify(execFile);
 
 function errorMessage(e: unknown): string {
@@ -71,7 +74,7 @@ export async function callMemoir(args: string[], store: string): Promise<string 
   try {
     const { stdout } = (await execFileAsync(
       "uvx",
-      ["--from", "memoir-ai", "memoir", "-s", store, ...args],
+      ["--python", UVX_PYTHON, "--from", "memoir-ai", "memoir", "--store", store, ...args],
       {
         encoding: "utf8",
         timeout: 15_000,
