@@ -1,3 +1,5 @@
+## [2.1.0](https://github.com/disafronov/opencode-memoir/compare/v2.0.5...v2.1.0) (2026-07-12)
+
 ## [2.0.5](https://github.com/disafronov/opencode-memoir/compare/v2.0.4...v2.0.5) (2026-07-12)
 
 ## [2.0.4](https://github.com/disafronov/opencode-memoir/compare/v2.0.3...v2.0.4) (2026-07-12)
