@@ -69,15 +69,11 @@ export function setCachedBranch(sessionID: string, branch: string): void {
 /** Call the memoir CLI directly. */
 export async function callMemoir(args: string[], store: string): Promise<string | null> {
   try {
-    const { stdout } = (await execFileAsync(
-      "memoir",
-      ["--store", store, ...args],
-      {
-        encoding: "utf8",
-        timeout: 15_000,
-        maxBuffer: 1_024 * 1_024,
-      },
-    )) as { stdout: string };
+    const { stdout } = (await execFileAsync("memoir", ["--store", store, ...args], {
+      encoding: "utf8",
+      timeout: 15_000,
+      maxBuffer: 1_024 * 1_024,
+    })) as { stdout: string };
     return stdout.trim();
   } catch (e) {
     debugLog("callMemoir failed:", errorMessage(e));
