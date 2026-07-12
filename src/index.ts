@@ -22,7 +22,21 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
 
   const storePath = deriveStorePath();
 
-  const mcpCommand = ["uvx", "--python", UVX_PYTHON, "--from", "memoir-ai[mcp]", "memoir-mcp"];
+  // Failover: try `memoir-mcp` console script first (works once upstream
+  // registers [project.scripts]), fall back to direct python -c invocation.
+  const mcpFailover =
+    'exec memoir-mcp "$@" 2>/dev/null || exec python -c "from memoir.mcp.server import main; main()" "$@"';
+  const mcpCommand = [
+    "uvx",
+    "--python",
+    UVX_PYTHON,
+    "--from",
+    "memoir-ai[mcp]",
+    "sh",
+    "-c",
+    mcpFailover,
+    "memoir-mcp",
+  ];
   if (storePath) {
     mcpCommand.push("--store", storePath);
   }
