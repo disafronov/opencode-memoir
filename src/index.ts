@@ -7,6 +7,7 @@ import {
   deriveStorePath,
   pruneBranchCache,
   setPluginStoreOverride,
+  UVX_PYTHON,
 } from "./store.js";
 
 const sessionsWithStartupHint = new Set<string>();
@@ -21,7 +22,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
 
   const storePath = deriveStorePath();
 
-  const mcpCommand = ["uvx", "--from", "memoir-ai[mcp]", "memoir-mcp"];
+  const mcpCommand = ["uvx", "--python", UVX_PYTHON, "--from", "memoir-ai[mcp]", "memoir-mcp"];
   if (storePath) {
     mcpCommand.push("--store", storePath);
   }
