@@ -64,7 +64,7 @@ describe("branchCache", () => {
 });
 
 describe("callMemoir", () => {
-  it("returns null when uvx fails", async () => {
+  it("returns null when memoir CLI is unavailable", async () => {
     const result = await (await import("../src/store.ts")).callMemoir(
       ["status"],
       "/tmp/memoir-test",

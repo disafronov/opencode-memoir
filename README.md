@@ -2,11 +2,17 @@
 
 OpenCode plugin for [Memoir](https://github.com/zhangfengcdt/memoir): git-versioned, taxonomy-structured memory for coding agents.
 
-Dynamically loads the `memoir-mcp` MCP server via `uvx` — no manual CLI installation needed.
+Dynamically loads the `memoir-mcp` MCP server.
 
 ## Install
 
-Add the package name to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
+Prerequisite: install the Memoir CLI and MCP server first:
+
+```bash
+uv tool install --python 3.13 "memoir-ai[mcp]"
+```
+
+Then add the plugin to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
 
 ```jsonc
 {
@@ -16,7 +22,7 @@ Add the package name to your OpenCode config (`~/.config/opencode/opencode.jsonc
 }
 ```
 
-OpenCode downloads and resolves the package from npm automatically; no manual install or `npm:` prefix needed. To pin a version, append it: `"opencode-memoir@1.0.0"`.
+OpenCode downloads and resolves the package from npm automatically. To pin a version, append it: `"opencode-memoir@1.0.0"`.
 
 ## Quick start
 
@@ -58,14 +64,14 @@ All optional:
 
 ## How it works
 
-Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a dynamic MCP server. OpenCode starts the server via `uvx --from memoir-ai[mcp] memoir-mcp`, and all memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the LLM.
+Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a dynamic MCP server. OpenCode starts the server via the `memoir-mcp` command, and all memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the LLM.
 
 ## Development
 
 ### Prerequisites
 
 - Node.js >= 20
-- `uv` installed (for `uvx` to run memoir-mcp)
+- `memoir-ai[mcp]` installed (see Install above)
 
 ### Setup
 
