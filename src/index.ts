@@ -7,7 +7,6 @@ import {
   deriveStorePath,
   pruneBranchCache,
   setPluginStoreOverride,
-  UVX_PYTHON,
 } from "./store.js";
 
 const sessionsWithStartupHint = new Set<string>();
@@ -22,21 +21,7 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
 
   const storePath = deriveStorePath();
 
-  // Failover: try `memoir-mcp` console script first (works once upstream
-  // registers [project.scripts]), fall back to direct python -c invocation.
-  const mcpFailover =
-    'exec memoir-mcp "$@" 2>/dev/null || exec python -c "from memoir.mcp.server import main; main()" "$@"';
-  const mcpCommand = [
-    "uvx",
-    "--python",
-    UVX_PYTHON,
-    "--from",
-    "memoir-ai[mcp]",
-    "sh",
-    "-c",
-    mcpFailover,
-    "memoir-mcp",
-  ];
+  const mcpCommand = ["memoir-mcp"];
   if (storePath) {
     mcpCommand.push("--store", storePath);
   }
@@ -45,6 +30,9 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
     name: "memoir",
 
     config: async (config: Config): Promise<void> => {
+      debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
+      debugLog("config hook: mcpCommand length =", mcpCommand.length);
+
       config.command = config.command ?? {};
       config.command["memoir:onboard"] = {
         description: "Populate or refresh Memoir onboarding for this project",
@@ -70,8 +58,11 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
         type: "local" as const,
         command: mcpCommand,
         environment: storePath ? { MEMOIR_STORE: storePath } : undefined,
+        enabled: true,
       };
       config.mcp = mcp;
+
+      debugLog("config hook: registered mcp.memoir.command =", JSON.stringify(mcp.memoir?.command));
     },
 
     "shell.env": async (

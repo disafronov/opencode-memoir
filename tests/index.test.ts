@@ -67,8 +67,7 @@ describe("MemoirOpenCode factory", () => {
       environment?: Record<string, string>;
     };
     assert.strictEqual(mcpServer.type, "local");
-    assert.ok(mcpServer.command[0] === "uvx");
-    assert.ok(mcpServer.command.includes("memoir-mcp"));
+    assert.ok(mcpServer.command[0] === "memoir-mcp");
   });
 
   it("shell.env injects MEMOIR_STORE", async () => {
