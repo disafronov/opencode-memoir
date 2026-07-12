@@ -1,0 +1,58 @@
+minimum_pre_commit_version: "3.5.0"
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+  - pre-push
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+        stages: [pre-commit]
+      - id: check-added-large-files
+        stages: [pre-commit]
+        args: [--maxkb=512]
+      - id: check-merge-conflict
+        stages: [pre-commit]
+      - id: trailing-whitespace
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: mixed-line-ending
+        stages: [pre-commit]
+      - id: check-yaml
+        stages: [pre-commit]
+      - id: check-json
+        stages: [pre-commit]
+      - id: check-case-conflict
+        stages: [pre-commit]
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: make-lint
+        name: make lint (pre-commit)
+        stages: [pre-commit]
+        language: system
+        entry: make lint
+        pass_filenames: false
+
+      - id: make-typecheck
+        name: make typecheck (pre-commit)
+        stages: [pre-commit]
+        language: system
+        entry: make typecheck
+        pass_filenames: false
+
+      - id: make-test-build
+        name: make test build (pre-push)
+        stages: [pre-push]
+        language: system
+        entry: make test build
+        pass_filenames: false
