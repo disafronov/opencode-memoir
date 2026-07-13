@@ -1,9 +1,14 @@
 import type { Config, Plugin, PluginModule } from "@opencode-ai/plugin";
 import { debugLog } from "./debug.js";
+import {
+  callMemoirTool,
+  closeMemoirClient,
+  getMemoirClient,
+  startMemoirHttpServer,
+} from "./mcp-client.js";
 import { incrementMsgCount, pruneAll, sessionMsgCount, shouldRemind } from "./memory-saver.js";
 import {
   autoMatchMemoirBranch,
-  callMemoir,
   deriveStorePath,
   pruneBranchCache,
   setPluginStoreOverride,
@@ -26,10 +31,24 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
     mcpCommand.push("--store", storePath);
   }
 
-  const mcpServer = {
-    type: "local" as const,
-    command: mcpCommand,
-    environment: storePath ? { MEMOIR_STORE: storePath } : undefined,
+  const environment = storePath ? { MEMOIR_STORE: storePath } : undefined;
+
+  // The plugin owns a single shared memoir-mcp HTTP server (started in the
+  // config hook). opencode connects to it as a remote MCP server; the plugin's
+  // own hooks use the same URL via the internal client. One process, no stdio
+  // double-spawn. Populated once the HTTP server is up.
+  let mcpServer: { type: "remote"; url: string; enabled: boolean } | undefined;
+
+  // Plugin's own MCP client (separate from the LLM-facing mcpServer).
+  // Lazily connected on first use so merely loading the plugin — or running
+  // hooks that never touch memoir — spawns no subprocess.
+  const connectClient = async () => {
+    try {
+      return await getMemoirClient(mcpCommand, environment);
+    } catch (e) {
+      debugLog("plugin: failed to connect memoir client:", errorMessage(e));
+      return null;
+    }
   };
 
   const hooks: Record<string, unknown> = {
@@ -37,11 +56,23 @@ const MemoirOpenCode: Plugin = async (_input, rawOptions) => {
 
     config: async (config: Config): Promise<void> => {
       debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
-      debugLog("config hook: mcpCommand length =", mcpCommand.length);
+
+      try {
+        const url = await startMemoirHttpServer(mcpCommand, environment);
+        mcpServer = { type: "remote", url: url.toString(), enabled: true };
+      } catch (e) {
+        debugLog("config hook: failed to start memoir HTTP server:", errorMessage(e));
+        mcpServer = undefined;
+      }
 
       const mcp = config.mcp ?? {};
-      mcp.memoir = mcpServer;
+      if (mcpServer) mcp.memoir = mcpServer;
       config.mcp = mcp;
+
+      // Register on the returned hooks object too — opencode reads hooks.mcp
+      // for the MCP server, and it must reflect the (now known) URL. Assigning
+      // at return time would capture the pre-config undefined value.
+      if (mcpServer) hooks.mcp = { memoir: mcpServer };
 
       config.command = config.command ?? {};
       config.command["memoir:onboard"] = {
@@ -61,8 +92,6 @@ Memory rules:
 
 Then call memoir_memoir_remember with replace=true for durable onboarding facts. Use namespace codebase:onboard in git repositories and project:onboard outside git.`,
       };
-
-      debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
     },
 
     "shell.env": async (
@@ -86,7 +115,10 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
         const sid = input.sessionID ?? "default";
         incrementMsgCount(sid);
 
-        await autoMatchMemoirBranch(storePath, sid);
+        const client = await connectClient();
+        if (client) {
+          await autoMatchMemoirBranch(client, sid);
+        }
       } catch (e) {
         debugLog("chat.message: failed:", errorMessage(e));
       }
@@ -120,16 +152,15 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
     dispose: async (): Promise<void> => {
       try {
         if (process.env.MEMOIR_AUTO_SAVE === "1") {
-          for (const [sid, count] of sessionMsgCount) {
-            await callMemoir(
-              [
-                "remember",
-                `session.${sid}`,
-                "--message",
-                `Session ended — ${count} user messages exchanged`,
-              ],
-              storePath,
-            );
+          const client = await connectClient();
+          if (client) {
+            for (const [sid, count] of sessionMsgCount) {
+              await callMemoirTool(client, "memoir_remember", {
+                content: `Session ended — ${count} user messages exchanged`,
+                path: `session.${sid}`,
+                merge_policy: "replace",
+              });
+            }
           }
         }
       } catch (e) {
@@ -138,10 +169,9 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
       sessionsWithStartupHint.clear();
       pruneBranchCache();
       pruneAll();
+      await closeMemoirClient();
     },
   };
-
-  hooks.mcp = { memoir: mcpServer };
 
   return hooks;
 };

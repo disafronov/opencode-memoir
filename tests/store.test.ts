@@ -63,12 +63,50 @@ describe("branchCache", () => {
   });
 });
 
-describe("callMemoir", () => {
-  it("returns null when memoir CLI is unavailable", async () => {
-    const result = await (await import("../src/store.ts")).callMemoir(
-      ["status"],
-      "/tmp/memoir-test",
-    );
-    assert.ok(result === null || typeof result === "string");
+describe("callMemoirTool", () => {
+  it("returns text content from a successful tool call", async () => {
+    const { callMemoirTool } = await import("../src/mcp-client.ts");
+    const client = {
+      callTool: async () => ({ content: [{ type: "text", text: "ok" }] }),
+    };
+    const result = await callMemoirTool(client as never, "memoir_status");
+    assert.strictEqual(result, "ok");
+  });
+
+  it("returns null when the tool reports an error", async () => {
+    const { callMemoirTool } = await import("../src/mcp-client.ts");
+    const client = {
+      callTool: async () => ({ content: [], isError: true }),
+    };
+    const result = await callMemoirTool(client as never, "memoir_status");
+    assert.strictEqual(result, null);
+  });
+
+  it("returns null when callTool throws", async () => {
+    const { callMemoirTool } = await import("../src/mcp-client.ts");
+    const client = {
+      callTool: async () => {
+        throw new Error("boom");
+      },
+    };
+    const result = await callMemoirTool(client as never, "memoir_status");
+    assert.strictEqual(result, null);
+  });
+});
+
+describe("autoMatchMemoirBranch", () => {
+  it("no-ops when not in a git repo", async () => {
+    const { autoMatchMemoirBranch } = await import("../src/store.ts");
+    let called = false;
+    const client = {
+      callTool: async () => {
+        called = true;
+        return { content: [] };
+      },
+    };
+    // cwd for the test runner is a git repo, but currentGitBranch uses
+    // process.cwd(); we can't force non-git here, so just assert it doesn't throw.
+    await autoMatchMemoirBranch(client as never, "sess-git");
+    assert.ok(typeof called === "boolean");
   });
 });

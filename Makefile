@@ -20,7 +20,7 @@ typecheck: ## Run TypeScript type checking
 	npx tsc -p tsconfig.json --noEmit
 
 test: ## Run tests
-	npx tsx --test tests/*.test.ts
+	NODE_ENV=test npx tsx --test tests/*.test.ts
 
 build: ## Build the plugin (typecheck + bundle)
 	npm run build
