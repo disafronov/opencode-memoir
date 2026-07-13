@@ -57,16 +57,18 @@ describe("MemoirOpenCode factory", () => {
 
   it("returns top-level mcp server (memoir)", async () => {
     const hooks = await plugin.server(undefined, {});
+    const config = {} as Record<string, unknown>;
+    await (hooks.config as (c: Record<string, unknown>) => Promise<void>)(config);
     const mcp = (hooks as { mcp?: Record<string, unknown> }).mcp;
     assert.ok(mcp);
     assert.ok(mcp.memoir);
     const mcpServer = mcp.memoir as {
       type: string;
-      command: string[];
-      environment?: Record<string, string>;
+      url: string;
+      enabled?: boolean;
     };
-    assert.strictEqual(mcpServer.type, "local");
-    assert.ok(mcpServer.command[0] === "memoir-mcp");
+    assert.strictEqual(mcpServer.type, "remote");
+    assert.ok(mcpServer.url.startsWith("http://"));
   });
 
   it("shell.env injects MEMOIR_STORE", async () => {

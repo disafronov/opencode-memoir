@@ -1,14 +1,8 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { promisify } from "node:util";
-import { debugLog } from "./debug.js";
-
-const execFileAsync = promisify(execFile);
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { callMemoirTool } from "./mcp-client.js";
 
 /** Resolve memoir store path.
  *  1. Plugin `store` option override
@@ -66,42 +60,22 @@ export function setCachedBranch(sessionID: string, branch: string): void {
   branchCache.set(sessionID, branch);
 }
 
-/** Call the memoir CLI directly. */
-export async function callMemoir(args: string[], store: string): Promise<string | null> {
-  try {
-    const { stdout } = (await execFileAsync("memoir", ["--store", store, ...args], {
-      encoding: "utf8",
-      timeout: 15_000,
-      maxBuffer: 1_024 * 1_024,
-    })) as { stdout: string };
-    return stdout.trim();
-  } catch (e) {
-    debugLog("callMemoir failed:", errorMessage(e));
-    return null;
-  }
-}
-
-export async function autoMatchMemoirBranch(store: string, sessionID: string): Promise<void> {
+export async function autoMatchMemoirBranch(client: Client, sessionID: string): Promise<void> {
   const codeBranch = currentGitBranch();
   if (!codeBranch) return;
 
   const cached = getCachedBranch(sessionID);
   if (cached === codeBranch) return;
 
-  // Check if branch exists in memoir
-  const branchResult = await callMemoir(["--json", "branch"], store);
-  if (branchResult === null) return;
-
-  try {
-    const data = JSON.parse(branchResult);
-    const branches: string[] = data?.branches ?? [];
-    if (!branches.includes(codeBranch)) {
-      await callMemoir(["branch", codeBranch], store);
-    }
-    await callMemoir(["checkout", codeBranch], store);
+  // memoir_checkout (per the v0.2.4 contract) switches to a branch, creating
+  // it on demand when `create` is true. A single call replaces the old
+  // branches-list → branch → checkout CLI sequence.
+  const result = await callMemoirTool(client, "memoir_checkout", {
+    target: codeBranch,
+    create: true,
+  });
+  if (result !== null) {
     setCachedBranch(sessionID, codeBranch);
-  } catch (e) {
-    debugLog("autoMatchMemoirBranch: parsing failed:", errorMessage(e));
   }
 }
 
