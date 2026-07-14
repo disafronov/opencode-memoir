@@ -1,7 +1,25 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, it } from "node:test";
 
 import { currentGitBranch, deriveStorePath, MemoirBranchMatcher } from "../src/store.ts";
+
+const tempRepos = new Set<string>();
+
+function createGitRepo(branch = "test-branch"): string {
+  const cwd = mkdtempSync(join(tmpdir(), "memoir-store-test-"));
+  tempRepos.add(cwd);
+  execFileSync("git", ["init", "--initial-branch", branch], { cwd, stdio: "ignore" });
+  return cwd;
+}
+
+afterEach(() => {
+  for (const cwd of tempRepos) rmSync(cwd, { recursive: true, force: true });
+  tempRepos.clear();
+});
 
 describe("deriveStorePath", () => {
   it("uses pluginStoreOverride when set", () => {
@@ -83,7 +101,8 @@ describe("MemoirBranchMatcher", () => {
   });
 
   it("reads the actual store branch on every match", async () => {
-    const codeBranch = currentGitBranch(process.cwd());
+    const cwd = createGitRepo();
+    const codeBranch = currentGitBranch(cwd);
     const calls: string[] = [];
     const client = {
       callTool: async (input: { name: string }) => {
@@ -92,13 +111,14 @@ describe("MemoirBranchMatcher", () => {
       },
     };
     const matcher = new MemoirBranchMatcher();
-    await matcher.match(client as never, process.cwd());
-    await matcher.match(client as never, process.cwd());
+    await matcher.match(client as never, cwd);
+    await matcher.match(client as never, cwd);
     assert.deepEqual(calls, ["memoir_status", "memoir_status"]);
   });
 
   it("drains active captures before checkout and rechecks the branch", async () => {
-    const codeBranch = currentGitBranch(process.cwd());
+    const cwd = createGitRepo();
+    const codeBranch = currentGitBranch(cwd);
     const order: string[] = [];
     let current = "other";
     const client = {
@@ -109,7 +129,7 @@ describe("MemoirBranchMatcher", () => {
       },
     };
     const matcher = new MemoirBranchMatcher();
-    await matcher.match(client as never, process.cwd(), async () => {
+    await matcher.match(client as never, cwd, async () => {
       order.push("drain");
       return true;
     });
@@ -117,6 +137,7 @@ describe("MemoirBranchMatcher", () => {
   });
 
   it("defers checkout when active captures do not drain", async () => {
+    const cwd = createGitRepo();
     const calls: string[] = [];
     const client = {
       callTool: async (input: { name: string }) => {
@@ -124,7 +145,7 @@ describe("MemoirBranchMatcher", () => {
         return { content: [{ type: "text", text: JSON.stringify({ branch: "other" }) }] };
       },
     };
-    await new MemoirBranchMatcher().match(client as never, process.cwd(), async () => false);
+    await new MemoirBranchMatcher().match(client as never, cwd, async () => false);
     assert.deepEqual(calls, ["memoir_status"]);
   });
 });
