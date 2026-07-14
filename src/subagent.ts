@@ -78,7 +78,7 @@ interface ModelResolution {
  * Resolve the model the memoir subagent should use.
  *
  * Priority:
- *   1. MEMOIR_SUMMARIZE_MODEL env (provider/model)
+ *   1. MEMOIR_AGENT_MODEL env (provider/model)
  *   2. config.small_model
  *   3. config.model
  *   4. omit — let opencode pick the session default
@@ -87,7 +87,7 @@ interface ModelResolution {
  * so we never hand opencode a bare model id it cannot resolve.
  */
 export function resolveMemoirModel(opts: ModelResolution): string | undefined {
-  const env = process.env.MEMOIR_SUMMARIZE_MODEL?.trim();
+  const env = process.env.MEMOIR_AGENT_MODEL?.trim();
   const candidate = env || opts.summarizeModel || opts.smallModel || opts.model;
   if (!candidate) return undefined;
   return candidate.includes("/") ? candidate : undefined;

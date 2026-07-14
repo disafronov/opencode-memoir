@@ -50,7 +50,7 @@ All optional:
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Emit diagnostic logs to stderr (prefixed `[memoir]`) |
 | `MEMOIR_AUTO_SAVE` | Per-turn capture + final capture on dispose. **Enabled by default**; set `=0` to disable |
-| `MEMOIR_SUMMARIZE_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
+| `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
 | `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
 | `MEMOIR_REMINDER_INTERVAL=N` | Periodic save/recall reminder every N messages (default: 5, 0 to disable) |
 

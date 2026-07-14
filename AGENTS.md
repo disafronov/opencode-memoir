@@ -67,7 +67,7 @@ All optional:
 - `MEMOIR_LOG` — Log destination: unset → `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log` (daily rotation, never stderr); `stderr` → live stderr (local debugging); any other value → explicit file path. Logs never pollute the opencode terminal by default.
 - `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
 - `MEMOIR_AUTO_SAVE` — Per-turn capture + final capture on dispose. **Enabled by default**; set `=0` to disable
-- `MEMOIR_SUMMARIZE_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
+- `MEMOIR_AGENT_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
 - `MEMOIR_CAPTURE_MIN_CHARS` — Local, LLM-free pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything)
 - `MEMOIR_REMINDER_INTERVAL=N` — Periodic reminder every N messages (default: 5, `0` to disable)
 
