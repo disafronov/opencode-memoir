@@ -227,7 +227,7 @@ export async function captureTurn(
     }
 
     if (transcript === null) return;
-    infoLog("captureTurn: dispatching memoir subagent (transcript", transcript.length, "chars)");
+    infoLog("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
     await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
     lastCaptured.set(sessionID, turnId);
   } catch (e) {

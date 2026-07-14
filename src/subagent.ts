@@ -93,37 +93,13 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/**
- * Fire-and-forget dispatch of the memoir subagent via promptAsync.
- *
- * In opencode a subagent is a CHILD session spawned by the `task` tool. The
- * native trigger is a `subtask` part in the prompted message: the prompt loop
- * pops it and runs SessionPrompt.handleSubtask, which writes an assistant
- * message (mode = the agent name) plus a TaskTool tool-part, then
- * TaskTool.execute calls sessions.create({ parentID }) and runs the agent in
- * that child session. The UI renders the child as a COLLAPSED subagent inside
- * the parent timeline, exactly like the built-in explorer. OpenCode returns
- * its compact report as the task result (or a synthetic background completion).
- *
- * The plugin client is the v1 SDK client; its promptAsync takes the
- * `{ path: { id }, body: { parts } }` shape. The running instance is already
- * bound to a working directory, so no `directory` is sent; the child session
- * inherits the parent's cwd/worktree.
- *
- * NOTE: noReply must NOT be set. promptSvc.prompt returns before the loop when
- * noReply is true, so the subtask would never be dispatched. promptAsync
- * itself forks and returns 204 immediately, so the dispatch stays
- * non-blocking for the caller.
- *
- * Errors are logged and rethrown to the capture layer so the turn remains
- * eligible for retry; the fire-and-forget hook still isolates the user session.
- */
+/** Queue a visible subtask through OpenCode's supported promptAsync input API. */
 export async function runMemoirSubagent(
   client: unknown,
   parentSessionID: string,
   task: string,
 ): Promise<void> {
-  type SubtaskPart = {
+  type SubtaskPartInput = {
     type: "subtask";
     agent: string;
     description: string;
@@ -132,12 +108,11 @@ export async function runMemoirSubagent(
   };
   type PromptAsync = (options: {
     path: { id: string };
-    body: { parts: SubtaskPart[] };
+    body: { parts: SubtaskPartInput[] };
   }) => Promise<unknown>;
 
   const api = (client as { session?: { promptAsync?: PromptAsync } } | null | undefined)?.session;
   if (!api?.promptAsync) {
-    debugLog("runMemoirSubagent: client.session.promptAsync unavailable");
     throw new Error("client.session.promptAsync unavailable");
   }
 
@@ -156,10 +131,10 @@ export async function runMemoirSubagent(
         ],
       },
     });
-    infoLog("memoir subagent fired (session", parentSessionID, ", task", task.length, "chars)");
+    infoLog("memoir subtask accepted (session", parentSessionID, ", task", task.length, "chars)");
   } catch (e) {
     debugLog("runMemoirSubagent failed:", errorMessage(e));
-    infoLog("memoir subagent dispatch FAILED:", errorMessage(e));
+    infoLog("memoir subtask submission FAILED:", errorMessage(e));
     throw e;
   }
 }
