@@ -82,4 +82,19 @@ describe("MemoirOpenCode factory", () => {
     const hooks = await plugin.server(undefined, {});
     await hooks.dispose();
   });
+
+  it("config hook registers the memoir subagent (subagent mode, memoir_* only)", async () => {
+    const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
+    const config: {
+      agent?: Record<string, { mode?: string; permission?: Record<string, string> }>;
+    } = {};
+    await (hooks.config as (c: typeof config) => Promise<void>)(config);
+    assert.ok(config.agent);
+    const agent = config.agent.memoir;
+    assert.ok(agent);
+    assert.strictEqual(agent.mode, "subagent");
+    const perm = agent.permission ?? {};
+    assert.strictEqual(perm["*"], "deny");
+    assert.strictEqual(perm["memoir_*"], "allow");
+  });
 });
