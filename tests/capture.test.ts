@@ -82,11 +82,20 @@ describe("shouldCaptureTurn", () => {
 
 describe("buildTurnCaptureTask", () => {
   it("embeds the transcript and imposes silence + taxonomy rules", () => {
-    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
+    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello", [
+      { name: "memoir_memoir_remember", description: "store a durable fact at a taxonomy path" },
+    ]);
     assert.match(task, /SILENT/);
     assert.match(task, /memoir_memoir_remember/);
+    assert.match(task, /store a durable fact at a taxonomy path/);
     assert.match(task, /USER/);
     assert.match(task, /hello/);
+  });
+
+  it("omits the tool section when no tools are supplied", () => {
+    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
+    assert.doesNotMatch(task, /Available memory tools/);
+    assert.match(task, /SILENT/);
   });
 });
 
@@ -153,7 +162,7 @@ describe("captureTurn", () => {
       assert.ok(prompted);
       assert.equal(prompted?.type, "subtask");
       assert.equal(prompted?.agent, "memoir");
-      assert.match(prompted?.prompt ?? "", /memoir_memoir_remember/);
+      assert.match(prompted?.prompt ?? "", /TURN TRANSCRIPT/);
       // The v1 SDK client's promptAsync takes { path, body } with no
       // `directory` field — the instance is already directory-bound. Assert
       // directory is never sent.

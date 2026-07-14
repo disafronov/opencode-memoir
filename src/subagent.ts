@@ -1,5 +1,6 @@
 import type { AgentConfig } from "@opencode-ai/sdk";
 import { debugLog, infoLog } from "./debug.js";
+import { loadPrompt } from "./prompts.js";
 
 // opencode restricts an agent's available tools through its `permission`
 // ruleset (NOT a `tools` allowlist — that field is ignored for config agents).
@@ -19,31 +20,13 @@ export type MemoirAgentSpec = AgentConfig & {
 
 export const MEMOIR_AGENT_NAME = "memoir";
 
-// System prompt for the memoir subagent. It operates the memoir MCP server
-// (memoir_* tools) and is locked to those tools only — no filesystem, no
-// shell, no network. The per-call task (parts.text) tells it whether to
-// capture (extract + remember) or to recall (summarize + get).
-const MEMOIR_AGENT_PROMPT = `You are the Memoir memory agent for this coding session.
-
-You manage a git-versioned, taxonomy-structured long-term memory through the
-memoir MCP server. You have access ONLY to the following tools:
-- memoir_memoir_remember — store a durable fact at an explicit taxonomy path
-- memoir_memoir_recall — find relevant memory paths by query
-- memoir_memoir_get — read exact memory paths
-- memoir_memoir_summarize — list stored taxonomy paths
-- memoir_memoir_status — store/branch status
-- memoir_memoir_branches — list branches
-- memoir_memoir_checkout — switch branch
-
-General rules:
-- Record ONLY verified, durable facts: user-stated preferences/constraints,
-  project architecture/facts, decisions, and recurring patterns. Do NOT store
-  raw conversation, ephemeral todo state, or speculative opinions.
-- Use an explicit 3-level taxonomy path for every memoir_memoir_remember call
-  (e.g. preferences.coding.languages, project.architecture.layout,
-  decisions.api.auth). Never let the classifier guess — you pick the path.
-- Prefer updating an existing path (memoir_memoir_get first) over duplicates.
-- Be terse. Do not narrate your work back to the user.`;
+// System prompt for the memoir subagent, loaded from prompts/subagent-system.tmpl.
+// It is intentionally tool-free: the subagent is locked to the memoir_* tools
+// via its `permission` ruleset (see buildMemoirAgent), and opencode already
+// exposes those tools to it. The exact tool catalog — names + descriptions — is
+// injected per call into the task prompt by buildTurnCaptureTask, so this prompt
+// stays generic and reusable across memoir-mcp versions.
+const MEMOIR_AGENT_PROMPT = loadPrompt("subagent-system.tmpl");
 
 /**
  * Build the memoir subagent config.

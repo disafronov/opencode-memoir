@@ -42,8 +42,9 @@ The plugin owns a single shared `memoir-mcp` HTTP server (spawned once via `uvx`
 |------|------:|------|
 | `src/index.ts` | ~240 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
 | `src/mcp-client.ts` | ~230 | Single shared HTTP `memoir-mcp` server + internal `Client` + `callMemoirTool` |
-| `src/subagent.ts` | ~160 | `memoir` subagent config (`AgentConfig`, mode subagent, `memoir_*` tools only) + `runMemoirSubagent` runner + `resolveMemoirModel` |
-| `src/capture.ts` | ~220 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, `buildTurnCaptureTask` |
+| `src/subagent.ts` | ~160 | `memoir` subagent config (`AgentConfig`, mode subagent, `memoir_*` tools only) + `runMemoirSubagent` runner + `resolveMemoirModel`. System prompt is tool-free and loaded from `prompts/subagent-system.tmpl` |
+| `src/capture.ts` | ~220 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, `buildTurnCaptureTask` (renders `prompts/capture-task.tmpl`, injecting the live memoir tool catalog) |
+| `src/prompts.ts` | ~25 | `loadPrompt(file)` — reads a `.tmpl` from `prompts/` (dev) or `dist/prompts/` (bundled), cached. The `prompts/` dir holds plain-text prompt templates only (no code): `subagent-system.tmpl` (tool-free subagent system prompt), `capture-task.tmpl` (per-turn capture task, `{{TOOLS_SECTION}}` + `{{TRANSCRIPT}}` placeholders), `onboard.tmpl` (`/memoir:onboard` slash command), `startup-hint.tmpl` + `reminder.tmpl` (main-agent system prompts) |
 | `src/store.ts` | ~71 | Branch auto-match, git branch/commit helpers, branch cache; thin wrapper over `deriveStorePath` (logic in `path.ts`) |
 | `src/path.ts` | ~40 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
 | `src/memory-saver.ts` | ~25 | Message counter for periodic reminders |
