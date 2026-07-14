@@ -4,7 +4,6 @@ import { captureTurn } from "./capture.js";
 import { CaptureLifecycle } from "./capture-lifecycle.js";
 import { debugLog, infoLog } from "./debug.js";
 import { callMemoirTool, MemoirRuntime } from "./mcp-client.js";
-import { MemorySaver, shouldRemind } from "./memory-saver.js";
 import { safeRealpath } from "./path.js";
 import { loadPrompt } from "./prompts.js";
 import { deriveStorePath, MemoirBranchMatcher } from "./store.js";
@@ -51,7 +50,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const lastCaptured = new Map<string, string>();
   const capturePending = new Set<string>();
   const captureLifecycle = new CaptureLifecycle();
-  const memorySaver = new MemorySaver();
+  const messageCounts = new Map<string, number>();
   const turnStatus = new Map<string, string>();
 
   // The plugin owns a single shared memoir-mcp HTTP server (started in the
@@ -168,7 +167,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         if (input.agent === MEMOIR_AGENT_NAME || isMemoirSubtask || isSynthetic) return;
 
         parentSessions.add(sid);
-        memorySaver.increment(sid);
+        messageCounts.set(sid, (messageCounts.get(sid) ?? 0) + 1);
 
         const client = await connectClient();
         if (client) {
@@ -290,12 +289,6 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
             }
           }
         }
-
-        const count = memorySaver.get(sid);
-        if (shouldRemind(count)) {
-          // Text in prompts/reminder.tmpl; tool-free by design (see hint above).
-          output.system?.push(loadPrompt("reminder.tmpl"));
-        }
       } catch (e) {
         debugLog("system.transform: failed:", errorMessage(e));
       }
@@ -306,7 +299,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         if (process.env.MEMOIR_AUTO_SAVE === "1") {
           const client = await connectClient();
           if (client) {
-            for (const [sid, count] of memorySaver.counts) {
+            for (const [sid, count] of messageCounts) {
               await callMemoirTool(client, "memoir_remember", {
                 content: `Session ended — ${count} user messages exchanged`,
                 path: `session.${sid}`,
@@ -323,7 +316,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       capturePending.clear();
       captureLifecycle.clear();
       branchMatcher.clear();
-      memorySaver.clear();
+      messageCounts.clear();
       turnStatus.clear();
       lastCaptured.clear();
       await runtime.close();

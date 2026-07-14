@@ -49,7 +49,6 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 | `src/prompts.ts` | ~25 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
 | `src/store.ts` | ~71 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~40 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
-| `src/memory-saver.ts` | ~25 | Message counter for periodic reminders |
 | `src/turn-status.ts` | ~20 | Builds the compact per-turn model status from the `memoir_status` response |
 | `src/debug.ts` | ~60 | File logger: `infoLog` (always) + `debugLog` (`MEMOIR_DEBUG=1`); dest via `MEMOIR_LOG` |
 
@@ -59,7 +58,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 - **`shell.env`** — Injects `MEMOIR_STORE` into shell environment
 - **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, and refreshes the compact model status; ignores synthetic and memoir-child messages so capture cannot trigger itself
 - **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
-- **`experimental.chat.system.transform`** — Compact current status (every model call in the turn) + startup hint and proactive recall (once/session) + periodic reminder (every N messages)
+- **`experimental.chat.system.transform`** — Compact current status (every model call in the turn) + startup hint and proactive recall (once/session)
 - **`dispose`** — Optionally saves session markers, closes the instance MCP process, and clears pending state
 
 All hooks wrap their body in try/catch, log via `debugLog()`, and never propagate errors. Capture is fire-and-forget. Its child session is intentionally visible as a collapsed subagent in the parent timeline and writes through `memoir_remember`.
@@ -74,20 +73,18 @@ All optional:
 - `MEMOIR_AUTO_SAVE` — Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable
 - `MEMOIR_AGENT_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
 - `MEMOIR_CAPTURE_MIN_CHARS` — Local, LLM-free pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything)
-- `MEMOIR_REMINDER_INTERVAL=N` — Periodic reminder every N messages (default: 5, `0` to disable)
 
 ## Tests
 
-10 test files, 87 tests total — Node built-in test runner via `tsx --test`.
+9 test files, 80 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
 | `tests/store.test.ts` | 13 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
-| `tests/memory-saver.test.ts` | 7 | Instance-owned counters, reminder boundaries, and cleanup |
 | `tests/subagent.test.ts` | 8 | Model fallback isolation and dynamic Memoir-namespace permissions |
 | `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
 | `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
-| `tests/index.test.ts` | 20 | Module shape, hook behavior, connected recall/status/reminder flow, self-trigger filtering, and graceful degradation |
+| `tests/index.test.ts` | 20 | Module shape, hook behavior, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 5 | Debug gating plus normal file/stderr lifecycle logging |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |

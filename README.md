@@ -66,7 +66,6 @@ All optional:
 | `MEMOIR_AUTO_SAVE` | Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable |
 | `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
 | `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
-| `MEMOIR_REMINDER_INTERVAL=N` | Periodic save/recall reminder every N messages (default: 5, 0 to disable) |
 | `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` | Optional OpenCode feature flag. Runs automatic memoir capture as a native background job; without it, capture uses the compatible foreground path |
 
 ## Hooks
@@ -77,7 +76,7 @@ All optional:
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
 | `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; ignores synthetic and memoir-child messages |
 | `tool.execute.before` | Marks memoir's `task` invocation with `background: true` when OpenCode background subagents are enabled |
-| `experimental.chat.system.transform` | Startup hint (once/session) + proactive recall (`memoir_summarize` injected as prior context) + periodic reminder |
+| `experimental.chat.system.transform` | Compact status after real parent messages + startup hint and proactive recall once per session |
 | `dispose` | Optionally saves session markers, closes the project MCP process, and clears instance state |
 
 ## How it works
@@ -117,7 +116,6 @@ npm run test:coverage # optional source coverage report
 | `src/index.ts` | Plugin entry: MCP registration + all hooks + dispose |
 | `src/mcp-client.ts` | Project-scoped MCP process/client lifecycle and tool calls |
 | `src/store.ts` | Store path derivation and serialized store-branch matching |
-| `src/memory-saver.ts` | Per-session message counter for periodic reminders |
 | `src/debug.ts` | Conditional stderr logger (`MEMOIR_DEBUG=1`) |
 
 ## Publishing
