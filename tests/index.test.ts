@@ -109,6 +109,31 @@ describe("MemoirOpenCode factory", () => {
     }
   });
 
+  it("mirrors OpenCode's umbrella experimental flag and explicit override", async () => {
+    const previousBackground = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+    const previousExperimental = process.env.OPENCODE_EXPERIMENTAL;
+    process.env.OPENCODE_EXPERIMENTAL = "true";
+    delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+    try {
+      const hooks = await plugin.server(undefined, {});
+      const umbrella = { args: { subagent_type: "memoir" } };
+      await hooks["tool.execute.before"]({ tool: "task" }, umbrella);
+      assert.strictEqual(umbrella.args.background, true);
+
+      process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "false";
+      const overridden = { args: { subagent_type: "memoir" } };
+      await hooks["tool.execute.before"]({ tool: "task" }, overridden);
+      assert.strictEqual("background" in overridden.args, false);
+      await hooks.dispose();
+    } finally {
+      if (previousBackground === undefined)
+        delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previousBackground;
+      if (previousExperimental === undefined) delete process.env.OPENCODE_EXPERIMENTAL;
+      else process.env.OPENCODE_EXPERIMENTAL = previousExperimental;
+    }
+  });
+
   it("tracks foreground memoir tasks through tool.execute.after", async () => {
     const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
     const args = { subagent_type: "memoir" };
@@ -136,6 +161,20 @@ describe("MemoirOpenCode factory", () => {
       if (previous === undefined) delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
       else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previous;
     }
+  });
+
+  it("finishes a known background memoir task when its child errors", async () => {
+    const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
+    const args = { subagent_type: "memoir" };
+    await hooks["tool.execute.before"]({ tool: "task", callID: "call-error" }, { args });
+    await hooks["tool.execute.after"](
+      { tool: "task", callID: "call-error", args },
+      { metadata: { background: true, sessionId: "child-error" } },
+    );
+    await hooks.event({
+      event: { type: "session.error", properties: { sessionID: "child-error" } },
+    });
+    await hooks.dispose();
   });
 
   it("leaves memoir tasks foreground when native background jobs are disabled", async () => {

@@ -76,7 +76,7 @@ All optional:
 
 ## Tests
 
-9 test files, 80 tests total — Node built-in test runner via `tsx --test`.
+9 test files, 82 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
@@ -84,7 +84,7 @@ All optional:
 | `tests/subagent.test.ts` | 8 | Model fallback isolation and dynamic Memoir-namespace permissions |
 | `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
 | `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
-| `tests/index.test.ts` | 20 | Module shape, hook behavior, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
+| `tests/index.test.ts` | 22 | Module shape, hook behavior, background flag parity, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 5 | Debug gating plus normal file/stderr lifecycle logging |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |

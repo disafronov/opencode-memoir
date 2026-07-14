@@ -16,6 +16,9 @@ describe("buildTurnStatus", () => {
       "[memoir] main · memory available (2 memories)",
     );
     assert.equal(buildTurnStatus('{"branch":"main"}'), "[memoir] main");
+    assert.equal(buildTurnStatus('{"memory_count":2}'), "[memoir] memory available (2 memories)");
+    assert.equal(buildTurnStatus('{"branch":1,"memory_count":"2"}'), "");
+    assert.equal(buildTurnStatus(null), "");
     assert.equal(buildTurnStatus("invalid"), "");
   });
 });
