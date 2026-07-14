@@ -2,7 +2,8 @@
 
 OpenCode plugin for [Memoir](https://github.com/zhangfengcdt/memoir): git-versioned, taxonomy-structured memory for coding agents.
 
-Dynamically loads the `memoir-mcp` MCP server.
+Launches the globally installed `memoir-mcp` console script and registers it as
+a project-scoped remote MCP server.
 
 ## Install
 
@@ -43,6 +44,10 @@ OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true opencode
 With this flag, capture no longer blocks the parent session while the memoir
 subagent extracts and stores durable facts.
 
+OpenCode's umbrella `OPENCODE_EXPERIMENTAL=true` also enables background
+subagents unless `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=false` explicitly
+overrides it. The plugin mirrors that precedence.
+
 ## Store configuration
 
 The plugin delegates store path resolution to `memoir-mcp`. Override via `MEMOIR_STORE` env var or `store` plugin option:
@@ -62,11 +67,12 @@ All optional:
 | Variable | Effect |
 |---|---|
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
-| `MEMOIR_DEBUG=1` | Emit diagnostic logs to stderr (prefixed `[memoir]`) |
+| `MEMOIR_DEBUG=1` | Add verbose diagnostic entries to the configured Memoir log |
+| `MEMOIR_LOG` | Log destination: unset uses `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log`; `stderr` enables live stderr; any other value is an explicit file path |
 | `MEMOIR_AUTO_SAVE` | Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable |
 | `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
 | `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
-| `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` | Optional OpenCode feature flag. Runs automatic memoir capture as a native background job; without it, capture uses the compatible foreground path |
+| `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` | Optional OpenCode feature flag. Runs capture as a native background job; explicit `false` overrides the umbrella experimental flag |
 
 ## Hooks
 
@@ -76,8 +82,9 @@ All optional:
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
 | `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; ignores synthetic and memoir-child messages |
 | `tool.execute.before` | Marks memoir's `task` invocation with `background: true` when OpenCode background subagents are enabled |
+| `tool.execute.after` + `event` | Tracks foreground completion and known background child idle/error events so checkout does not overlap an active capture |
 | `experimental.chat.system.transform` | Compact status after real parent messages + startup hint and proactive recall once per session |
-| `dispose` | Optionally saves session markers, closes the project MCP process, and clears instance state |
+| `dispose` | Saves session markers when `MEMOIR_AUTO_SAVE=1` is explicit, closes the project MCP process, and clears instance state |
 
 ## How it works
 
@@ -85,12 +92,13 @@ Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, th
 
 Capturing is done by a dedicated visible, collapsible `memoir` subagent. It can use the dynamic `memoir_*` tool namespace except for the store-global `memoir_memoir_checkout`; branch checkout remains owned by the plugin so a subagent cannot move the shared store. Every non-Memoir tool remains denied. The capture task includes the live MCP tool names and descriptions so a small local model does not have to infer the catalog. Deterministic settings keep it suitable for that model. On each real `chat.message`, the plugin captures the previous completed turn: the incoming user message has not entered the transcript yet. This one-turn delay prevents capture activity from triggering another capture.
 
-The subagent finishes with a compact report of confirmed writes (`Captured N memories`, taxonomy paths, and brief reasons), or a single reason why nothing was captured. OpenCode returns that report to the parent agent through the normal task result; the report is based on actual tool outcomes rather than intended writes.
+The subagent is instructed to finish with a compact report of confirmed writes (`Captured N memories`, taxonomy paths, and brief reasons), or a single reason why nothing was captured. OpenCode returns that report to the parent agent through the normal task result. The prompt requires the report to reflect actual tool outcomes rather than intended writes.
 
 After each real parent-session message, every model call in that turn receives a compact status from `memoir_status`, such as `[memoir] fix6 · memory available (31 memories)`. Synthetic notifications and memoir child activity do not update it, and the status does not instruct the model to perform recall.
 
 - With `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`, the plugin adds `background: true` in `tool.execute.before`. OpenCode runs the child through its native `BackgroundJob` path and immediately releases the parent session.
-- Without the flag, the plugin does not add `background`; OpenCode runs the same capture task through the original foreground subagent path. Memory capture remains available, but the parent session may wait for it to finish.
+- `OPENCODE_EXPERIMENTAL=true` has the same effect unless the dedicated background-subagent flag is explicitly false, matching OpenCode's native precedence.
+- Without either enabling flag, the plugin does not add `background`; OpenCode runs the same capture task through the original foreground subagent path. Memory capture remains available, but the parent session may wait for it to finish.
 - Before changing the shared memoir branch, the plugin waits for active foreground tasks (`tool.execute.after`) and native background tasks (the known child session's terminal idle/error event). A timeout defers checkout instead of moving the store underneath a running capture.
 
 At session start, `experimental.chat.system.transform` injects a recall hint plus a `memoir_summarize` snapshot so the agent begins with prior context.
@@ -108,7 +116,6 @@ At session start, `experimental.chat.system.transform` injects a recall hint plu
 npm install
 npm run build    # typecheck + emit dist
 npm test         # run the test suite
-npm run test:coverage # optional source coverage report
 ```
 
 ### Source layout
@@ -117,8 +124,14 @@ npm run test:coverage # optional source coverage report
 |---|---|
 | `src/index.ts` | Plugin entry: MCP registration + all hooks + dispose |
 | `src/mcp-client.ts` | Project-scoped MCP process/client lifecycle and tool calls |
+| `src/capture.ts` | Transcript extraction, filtering, task construction, and capture dispatch |
+| `src/capture-lifecycle.ts` | Foreground/background capture tracking and checkout drain |
+| `src/subagent.ts` | Subagent permissions, model selection, and OpenCode task dispatch |
 | `src/store.ts` | Store path derivation and serialized store-branch matching |
-| `src/debug.ts` | Conditional stderr logger (`MEMOIR_DEBUG=1`) |
+| `src/path.ts` | Symlink-safe project and store path helpers |
+| `src/prompts.ts` | Cached prompt-template loader |
+| `src/turn-status.ts` | Compact model-facing status formatter |
+| `src/debug.ts` | File/stderr lifecycle and debug logger |
 
 ## Publishing
 

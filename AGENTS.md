@@ -41,11 +41,11 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 | File | Lines | Role |
 |------|------:|------|
-| `src/index.ts` | ~240 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
-| `src/mcp-client.ts` | ~230 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
-| `src/subagent.ts` | ~160 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + runner + model fallback resolution |
-| `src/capture.ts` | ~220 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch dedup/retry |
-| `src/capture-lifecycle.ts` | ~70 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
+| `src/index.ts` | ~330 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
+| `src/mcp-client.ts` | ~310 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
+| `src/subagent.ts` | ~165 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + runner + model fallback resolution |
+| `src/capture.ts` | ~235 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch dedup/retry |
+| `src/capture-lifecycle.ts` | ~60 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
 | `src/prompts.ts` | ~25 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
 | `src/store.ts` | ~71 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~40 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
@@ -59,20 +59,21 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 - **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, and refreshes the compact model status; ignores synthetic and memoir-child messages so capture cannot trigger itself
 - **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
 - **`experimental.chat.system.transform`** — Compact current status (every model call in the turn) + startup hint and proactive recall (once/session)
-- **`dispose`** — Optionally saves session markers, closes the instance MCP process, and clears pending state
+- **`dispose`** — Saves session markers only when `MEMOIR_AUTO_SAVE=1` is explicit, closes the instance MCP process, and clears pending state
 
-All hooks wrap their body in try/catch, log via `debugLog()`, and never propagate errors. Capture is fire-and-forget. Its child session is intentionally visible as a collapsed subagent in the parent timeline and writes through `memoir_remember`.
+Runtime hook failures are contained and logged; capture itself is fire-and-forget and does not propagate failures into the user turn. Its child session is intentionally visible as a collapsed subagent in the parent timeline, writes through `memoir_remember`, and returns a compact outcome report to the parent task.
 
 ## Environment Variables
 
 All optional:
 
-- `MEMOIR_DEBUG=1` — Verbose debug logging to stderr (`[memoir]` prefix). Basic lifecycle logs (server up, capture fired/skipped, recall injected) are always written to stderr regardless.
+- `MEMOIR_DEBUG=1` — Adds verbose entries to the configured Memoir log. Basic lifecycle entries (server up, capture fired/skipped, recall injected) are always logged.
 - `MEMOIR_LOG` — Log destination: unset → `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log` (daily rotation, never stderr); `stderr` → live stderr (local debugging); any other value → explicit file path. Logs never pollute the opencode terminal by default.
 - `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
 - `MEMOIR_AUTO_SAVE` — Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable
 - `MEMOIR_AGENT_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
 - `MEMOIR_CAPTURE_MIN_CHARS` — Local, LLM-free pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything)
+- `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` — Dedicated native-background flag. If unset, OpenCode and the plugin fall back to `OPENCODE_EXPERIMENTAL`; explicit `false` overrides the umbrella flag
 
 ## Tests
 
@@ -92,6 +93,9 @@ All optional:
 
 Remaining integration gap: a full live OpenCode + real `memoir-mcp` protocol
 session (the process lifecycle itself is covered with a fixture server).
+
+Latest built-in coverage snapshot: 98.71% lines, 88.13% branches, 94.92%
+functions. These are descriptive measurements, not mandatory CI thresholds.
 
 ## Build Pipeline
 
