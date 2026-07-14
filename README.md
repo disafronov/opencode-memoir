@@ -49,22 +49,26 @@ All optional:
 |---|---|
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Emit diagnostic logs to stderr (prefixed `[memoir]`) |
-| `MEMOIR_AUTO_SAVE=1` | Auto-save session marker on dispose (default: disabled) |
+| `MEMOIR_AUTO_SAVE` | Per-turn capture + final capture on dispose. **Enabled by default**; set `=0` to disable |
+| `MEMOIR_SUMMARIZE_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
+| `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
 | `MEMOIR_REMINDER_INTERVAL=N` | Periodic save/recall reminder every N messages (default: 5, 0 to disable) |
 
 ## Hooks
 
 | Hook | Purpose |
 |---|---|
-| `config` | Registers `memoir-mcp` as a dynamic MCP server; adds `/memoir:onboard` slash command |
+| `config` | Registers the `memoir` subagent (capture + recall), the shared `memoir-mcp` remote MCP server, and the `/memoir:onboard` slash command |
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
-| `chat.message` | Increments message counter; auto-matches memoir branch to current git branch |
-| `experimental.chat.system.transform` | Startup hint (once/session); periodic save/recall reminder |
-| `dispose` | Optionally saves session marker; clears all pending state |
+| `chat.message` | Increments message counter; auto-matches memoir branch; fire-and-forget captures the completed turn via the `memoir` subagent |
+| `experimental.chat.system.transform` | Startup hint (once/session) + proactive recall (`memoir_summarize` injected as prior context) + periodic reminder |
+| `dispose` | Fires a final capture of each session; optionally saves a session marker; clears all pending state |
 
 ## How it works
 
-Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a dynamic MCP server. OpenCode starts the server via the `memoir-mcp` command, and all memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the LLM.
+Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a **remote** MCP server — a single shared HTTP process spawned by the plugin. All memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the LLM.
+
+Capturing is done by a dedicated `memoir` subagent (mode `subagent`, restricted to `memoir_*` tools). On each completed turn `chat.message` fires the subagent in the background; it extracts durable facts and writes them via `memoir_remember`. Because subagents run as detached child sessions, capture never blocks or pollutes the parent timeline. At session start, `experimental.chat.system.transform` injects a recall hint plus a `memoir_summarize` snapshot so the agent begins with prior context.
 
 ## Development
 

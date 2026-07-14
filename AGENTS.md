@@ -34,48 +34,57 @@ npx tsx --test tests/store.test.ts
 
 ### Dynamic MCP Pattern
 
-Returns `mcp: { memoir: { type: 'local', command: 'uvx', args: [...] } }` to register the memoir-mcp server. The `mcp` field is NOT in `@opencode-ai/plugin`'s `Hooks` type, but OpenCode's Go runtime accepts it (`return hooks as unknown as Hooks`).
+The plugin owns a single shared `memoir-mcp` HTTP server (spawned once via `uvx`/`memoir-mcp` with `--http`, started in the `config` hook). It is registered as a **remote** MCP server: `mcp: { memoir: { type: 'remote', url, enabled: true } }`. openCode connects to it, and the plugin's own hooks use the same URL via an internal MCP client (`mcp-client.ts`). One process, no stdio double-spawn. The `mcp` field is NOT in `@opencode-ai/plugin`'s `Hooks` type, but OpenCode's Go runtime accepts it (`return hooks as unknown as Hooks`).
 
 ### Source Layout
 
 | File | Lines | Role |
 |------|------:|------|
-| `src/index.ts` | ~150 | Plugin entry: MCP registration + all hooks + dispose |
-| `src/store.ts` | ~115 | Store path derivation, branch auto-match, `callMemoir` CLI helper |
+| `src/index.ts` | ~240 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
+| `src/mcp-client.ts` | ~230 | Single shared HTTP `memoir-mcp` server + internal `Client` + `callMemoirTool` |
+| `src/subagent.ts` | ~160 | `memoir` subagent config (`AgentConfig`, mode subagent, `memoir_*` tools only) + `runMemoirSubagent` runner + `resolveMemoirModel` |
+| `src/capture.ts` | ~220 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, `buildTurnCaptureTask` |
+| `src/store.ts` | ~71 | Branch auto-match, git branch/commit helpers, branch cache; thin wrapper over `deriveStorePath` (logic in `path.ts`) |
+| `src/path.ts` | ~40 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
 | `src/memory-saver.ts` | ~25 | Message counter for periodic reminders |
-| `src/debug.ts` | 9 | Conditional stderr logger (`MEMOIR_DEBUG=1`) |
+| `src/debug.ts` | ~60 | File logger: `infoLog` (always) + `debugLog` (`MEMOIR_DEBUG=1`); dest via `MEMOIR_LOG` |
 
 ### Hooks
 
-- **`config`** — Registers `/memoir:onboard` slash command for project onboarding
+- **`config`** — Registers the `memoir` subagent (`AgentConfig`, mode `subagent`, `memoir_*` tools only, every other tool denied), the `/memoir:onboard` slash command, and the shared `memoir` remote MCP server
 - **`shell.env`** — Injects `MEMOIR_STORE` into shell environment
-- **`chat.message`** — Increments message counter, auto-matches memoir branch
-- **`experimental.chat.system.transform`** — Startup hint (once/session) + periodic reminder (every N messages)
-- **`dispose`** — Saves session marker, clears all pending state
+- **`chat.message`** — Increments message counter, auto-matches memoir branch, then **fire-and-forget captures** the just-completed turn via the `memoir` subagent
+- **`experimental.chat.system.transform`** — Startup hint (once/session) + proactive recall (`memoir_summarize` injected as prior context) + periodic reminder (every N messages)
+- **`dispose`** — Fires a final capture of each session, optionally saves a session marker, clears all pending state
 
-All hooks wrap their body in try/catch, log via `debugLog()`, never propagate errors.
+All hooks wrap their body in try/catch, log via `debugLog()`, never propagate errors. Capture is fire-and-forget: the subagent runs as a detached child session (invisible in the parent timeline) and writes to memoir via `memoir_remember` — the parent session is never blocked or polluted.
 
 ## Environment Variables
 
 All optional:
 
-- `MEMOIR_DEBUG=1` — Debug logging to stderr (`[memoir]` prefix)
-- `MEMOIR_STORE` — Override store path (passed as `--store` to memoir-mcp)
-- `MEMOIR_AUTO_SAVE=1` — Auto-save session marker on completion/dispose (default: disabled)
-- `MEMOIR_REMINDER_INTERVAL=N` — Periodic reminder every N messages (default: 5, 0 to disable)
+- `MEMOIR_DEBUG=1` — Verbose debug logging to stderr (`[memoir]` prefix). Basic lifecycle logs (server up, capture fired/skipped, recall injected) are always written to stderr regardless.
+- `MEMOIR_LOG` — Log destination: unset → `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log` (daily rotation, never stderr); `stderr` → live stderr (local debugging); any other value → explicit file path. Logs never pollute the opencode terminal by default.
+- `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
+- `MEMOIR_AUTO_SAVE` — Per-turn capture + final capture on dispose. **Enabled by default**; set `=0` to disable
+- `MEMOIR_SUMMARIZE_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
+- `MEMOIR_CAPTURE_MIN_CHARS` — Local, LLM-free pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything)
+- `MEMOIR_REMINDER_INTERVAL=N` — Periodic reminder every N messages (default: 5, `0` to disable)
 
 ## Tests
 
-4 test files, 31 tests total — Node built-in test runner via `tsx --test`.
+6 test files, 49 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| `tests/store.test.ts` | 11 | `deriveStorePath` (5), `currentGitBranch` (1), `branchCache` (3), `callMemoir` (1) |
+| `tests/store.test.ts` | 11 | `deriveStorePath` (5), `currentGitBranch` (1), `branchCache` (3), `callMemoirTool` (1) |
 | `tests/memory-saver.test.ts` | 7 | `incrementMsgCount` (3), `shouldRemind` (3), `pruneAll` (1) |
-| `tests/index.test.ts` | 10 | Module shape (1), hook registration & behavior (9) |
+| `tests/subagent.test.ts` | 6 | `resolveMemoirModel` env/chain isolation (6) |
+| `tests/capture.test.ts` | 7 | `buildTurnCaptureTask`, `shouldCaptureTurn`, `lastTurnTranscript`, `formatSessionTranscript`, `captureTurn` (fire-and-forget + dedup) |
+| `tests/index.test.ts` | 12 | Module shape (1), hook registration & behavior (10), subagent registration (1) |
 | `tests/debug.test.ts` | 3 | `MEMOIR_DEBUG` gating |
 
-Missing coverage: `autoMatchMemoirBranch` integration, startup hint idempotency.
+Missing coverage: `autoMatchMemoirBranch` integration, subagent spawn over the live session API.
 
 ## Build Pipeline
 

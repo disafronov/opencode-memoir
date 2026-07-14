@@ -2,7 +2,8 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { createConnection, createServer } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { debugLog } from "./debug.js";
+import { debugLog, infoLog } from "./debug.js";
+import { safeRealpath } from "./path.js";
 
 interface MemoirClientState {
   client: Client;
@@ -82,6 +83,7 @@ function cleanup(): void {
 export async function startMemoirHttpServer(
   command: string[],
   env?: Record<string, string>,
+  cwd?: string,
 ): Promise<URL> {
   if (serverUrl && serverProc) return serverUrl;
   if (startingServer) return startingServer;
@@ -102,6 +104,10 @@ export async function startMemoirHttpServer(
       // Merge with the parent env so PATH (and other essentials) survive —
       // passing only `env` would wipe PATH and break command resolution.
       env: { ...process.env, ...env },
+      // Run in the real (symlink-resolved) project dir so memoir-mcp's
+      // portable store slug is identical whether the repo is entered via a
+      // symlink or its real path.
+      cwd: cwd ? safeRealpath(cwd) : process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
     });
     serverProc = proc;
@@ -129,6 +135,7 @@ export async function startMemoirHttpServer(
 
     await waitForPort(port);
     serverUrl = url;
+    infoLog("memoir-mcp HTTP server up at", url.toString());
     return url;
   })();
 
