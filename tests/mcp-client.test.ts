@@ -4,31 +4,34 @@ import { fileURLToPath } from "node:url";
 
 import { MemoirRuntime } from "../src/mcp-client.ts";
 
+const fixture = fileURLToPath(new URL("fixtures/fake-mcp.mjs", import.meta.url));
+
 describe("MemoirRuntime", () => {
   it("owns server state per plugin instance", async () => {
-    const first = new MemoirRuntime(["memoir-mcp", "--store", "/tmp/first"]);
-    const second = new MemoirRuntime(["memoir-mcp", "--store", "/tmp/second"]);
+    const first = new MemoirRuntime([process.execPath, fixture]);
+    const second = new MemoirRuntime([process.execPath, fixture]);
 
     assert.notStrictEqual(first, second);
-    assert.equal((await first.start()).toString(), "http://127.0.0.1:9/mcp");
-    assert.equal((await second.start()).toString(), "http://127.0.0.1:9/mcp");
+    const firstUrl = await first.start();
+    const secondUrl = await second.start();
+    assert.match(firstUrl.toString(), /^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
+    assert.match(secondUrl.toString(), /^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
 
     await first.close();
     await second.close();
   });
 
   it("can be started again after close", async () => {
-    const runtime = new MemoirRuntime(["memoir-mcp"]);
-    await runtime.start();
+    const runtime = new MemoirRuntime([process.execPath, fixture]);
+    const first = await runtime.start();
     await runtime.close();
-    assert.equal((await runtime.start()).toString(), "http://127.0.0.1:9/mcp");
+    const second = await runtime.start();
+    assert.match(first.toString(), /^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
+    assert.match(second.toString(), /^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
     await runtime.close();
   });
 
-  it("starts and stops a real child HTTP process and shares concurrent starts", async () => {
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "coverage";
-    const fixture = fileURLToPath(new URL("fixtures/fake-mcp.mjs", import.meta.url));
+  it("starts and stops a real child process and shares concurrent starts", async () => {
     const runtime = new MemoirRuntime([process.execPath, fixture]);
     try {
       const [first, second] = await Promise.all([runtime.start(), runtime.start()]);
@@ -42,23 +45,14 @@ describe("MemoirRuntime", () => {
       assert.strictEqual((await runtime.start()).toString(), restarted.toString());
     } finally {
       await runtime.close();
-      if (previous === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previous;
     }
   });
 
   it("reports spawn failures and remains restartable", async () => {
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "coverage";
-    try {
-      const runtime = new MemoirRuntime([`missing-memoir-command-${process.pid}`]);
-      await assert.rejects(runtime.start(), /failed to spawn/);
-      await assert.rejects(runtime.start(), /failed to spawn/);
-      await runtime.close();
-    } finally {
-      if (previous === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previous;
-    }
+    const runtime = new MemoirRuntime([`missing-memoir-command-${process.pid}`]);
+    await assert.rejects(runtime.start(), /failed to spawn/);
+    await assert.rejects(runtime.start(), /failed to spawn/);
+    await runtime.close();
   });
 
   it("shares connections, resets on transport close, and closes the client", async () => {
@@ -66,7 +60,7 @@ describe("MemoirRuntime", () => {
     let connected = 0;
     let closed = 0;
     let transportClose: (() => void) | undefined;
-    const runtime = new MemoirRuntime(["memoir-mcp"], undefined, undefined, {
+    const runtime = new MemoirRuntime([process.execPath, fixture], undefined, undefined, {
       createClientConnection: () => {
         created++;
         const transport = {
@@ -101,7 +95,7 @@ describe("MemoirRuntime", () => {
 
   it("retries after a client connection failure and tolerates close failures", async () => {
     let attempts = 0;
-    const runtime = new MemoirRuntime(["memoir-mcp"], undefined, undefined, {
+    const runtime = new MemoirRuntime([process.execPath, fixture], undefined, undefined, {
       createClientConnection: () => {
         const client = {
           connect: async () => {
@@ -134,7 +128,7 @@ describe("MemoirRuntime", () => {
         };
       },
     };
-    const runtime = new MemoirRuntime(["memoir-mcp"]);
+    const runtime = new MemoirRuntime([process.execPath, fixture]);
     const first = await runtime.listTools(client as never);
     const second = await runtime.listTools(client as never);
     assert.deepStrictEqual(first, [
@@ -146,7 +140,7 @@ describe("MemoirRuntime", () => {
   });
 
   it("returns an empty catalog when discovery fails", async () => {
-    const runtime = new MemoirRuntime(["memoir-mcp"]);
+    const runtime = new MemoirRuntime([process.execPath, fixture]);
     const client = {
       listTools: async () => {
         throw "catalog failed";

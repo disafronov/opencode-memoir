@@ -18,8 +18,8 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json --declaration --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:node:* --external:child_process --external:cross-spawn --external:fs --external:os --external:path --external:stream --external:util --external:@opencode-ai/plugin --external:@opencode-ai/sdk --external:@modelcontextprotocol/sdk --sourcemap && mkdir -p dist/prompts && cp src/prompts/*.tmpl dist/prompts/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "NODE_ENV=test tsx --test tests/*.test.ts",
-    "test:coverage": "NODE_ENV=test node --import tsx --test --experimental-test-coverage '--test-coverage-include=src/**/*.ts' tests/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage '--test-coverage-include=src/**/*.ts' tests/*.test.ts",
     "prepublishOnly": "npm run build && npm test && node -e \"import('./dist/index.js').then(m=>{const d=m.default;if(!d||typeof d!=='object'||typeof d.server!=='function'||d.id!=='opencode-memoir'){console.error('Smoke FAILED: default export is not a V1 plugin module ({ id, server })');process.exit(1)}else{console.log('Smoke OK: id=',d.id,'server=',typeof d.server)}})\"",
     "lint": "biome check src/ tests/",
     "lint:fix": "biome check --write src/ tests/",
