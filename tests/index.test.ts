@@ -223,7 +223,7 @@ describe("MemoirOpenCode factory", () => {
     assert.strictEqual(perm.memoir_memoir_checkout, "deny");
   });
 
-  it("runs the connected branch, recall, reminder, status, and session-marker flow", async () => {
+  it("runs the connected branch, recall, status, and session-marker flow", async () => {
     const previousNodeEnv = process.env.NODE_ENV;
     const previousAutoSave = process.env.MEMOIR_AUTO_SAVE;
     process.env.NODE_ENV = "coverage";
@@ -290,7 +290,6 @@ describe("MemoirOpenCode factory", () => {
       await new Promise((resolve) => setImmediate(resolve));
       assert.ok(output.system.some((line) => line.includes('"total":29')));
       assert.ok(output.system.some((line) => line.includes(`memory available (31 memories)`)));
-      assert.ok(output.system.some((line) => line.includes("durable")));
 
       const second = { system: [] as string[] };
       await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, second);
