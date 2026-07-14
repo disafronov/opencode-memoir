@@ -87,10 +87,10 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       if (mcpServer) hooks.mcp = { memoir: mcpServer };
 
       // Register the memoir subagent (capture + recall). Its model resolves
-      // from MEMOIR_SUMMARIZE_MODEL → small_model → model → opencode default.
+      // from MEMOIR_AGENT_MODEL → small_model → model → opencode default.
       // opencode reads the agent from `config.agent` (singular), not `agents`.
       const agentModel = resolveMemoirModel({
-        summarizeModel: process.env.MEMOIR_SUMMARIZE_MODEL,
+        summarizeModel: process.env.MEMOIR_AGENT_MODEL,
         smallModel: (config as { small_model?: string }).small_model,
         model: (config as { model?: string }).model,
       });
