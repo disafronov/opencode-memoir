@@ -33,6 +33,43 @@ describe("MemoirOpenCode factory", () => {
     assert.strictEqual(typeof hooks["chat.message"], "function");
   });
 
+  it("marks only memoir tasks as native background jobs when enabled", async () => {
+    const previous = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+    process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "true";
+    try {
+      const hooks = await plugin.server(undefined, {});
+      const memoir = { args: { subagent_type: "memoir" } };
+      await hooks["tool.execute.before"]({ tool: "task" }, memoir);
+      assert.strictEqual(memoir.args.background, true);
+
+      const other = { args: { subagent_type: "general" } };
+      await hooks["tool.execute.before"]({ tool: "task" }, other);
+      assert.strictEqual("background" in other.args, false);
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previous;
+    }
+  });
+
+  it("leaves memoir tasks foreground when native background jobs are disabled", async () => {
+    const previousBackground = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+    const previousExperimental = process.env.OPENCODE_EXPERIMENTAL;
+    delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+    delete process.env.OPENCODE_EXPERIMENTAL;
+    try {
+      const hooks = await plugin.server(undefined, {});
+      const output = { args: { subagent_type: "memoir" } };
+      await hooks["tool.execute.before"]({ tool: "task" }, output);
+      assert.strictEqual("background" in output.args, false);
+    } finally {
+      if (previousBackground === undefined)
+        delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previousBackground;
+      if (previousExperimental === undefined) delete process.env.OPENCODE_EXPERIMENTAL;
+      else process.env.OPENCODE_EXPERIMENTAL = previousExperimental;
+    }
+  });
+
   it("returns system.transform hook", async () => {
     const hooks = await plugin.server(undefined, {});
     assert.strictEqual(typeof hooks["experimental.chat.system.transform"], "function");

@@ -27,6 +27,20 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+function envFlag(name: string): boolean | undefined {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value === undefined || value === "") return undefined;
+  return value === "1" || value === "true";
+}
+
+function backgroundSubagentsEnabled(): boolean {
+  return (
+    envFlag("OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS") ??
+    envFlag("OPENCODE_EXPERIMENTAL") ??
+    false
+  );
+}
+
 const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const opts = (rawOptions ?? {}) as { store?: string };
   if (opts.store) setPluginStoreOverride(opts.store);
@@ -155,6 +169,30 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
         void captureTurn(sdkClient, sid, directory, lastCaptured);
       } catch (e) {
         debugLog("chat.message: failed:", errorMessage(e));
+      }
+    },
+
+    "tool.execute.before": async (
+      input: { tool: string },
+      output: { args?: Record<string, unknown> },
+    ): Promise<void> => {
+      try {
+        if (input.tool !== "task" || output.args?.subagent_type !== MEMOIR_AGENT_NAME) return;
+        if (!backgroundSubagentsEnabled()) {
+          debugLog(
+            "memoir task remains foreground: OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS is disabled",
+          );
+          return;
+        }
+
+        // A `subtask` prompt part does not expose TaskTool's `background`
+        // parameter. SessionPrompt passes the mutable task arguments through
+        // this hook immediately before TaskTool.execute, so opt only memoir's
+        // capture task into OpenCode's native BackgroundJob path here.
+        output.args.background = true;
+        infoLog("memoir capture task promoted to native background job");
+      } catch (e) {
+        debugLog("tool.execute.before: failed:", errorMessage(e));
       }
     },
 
