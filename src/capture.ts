@@ -123,7 +123,7 @@ export function lastTurnTranscript(messages: ChatMessage[]): string | null {
 export function shouldCaptureTurn(
   transcript: string | null,
   minChars = captureMinChars(),
-): boolean {
+): transcript is string {
   if (minChars <= 0) return transcript !== null && transcript.length > 0;
   return transcript !== null && transcript.length >= minChars;
 }
@@ -216,13 +216,11 @@ export async function captureTurn(
 
     const transcript = lastTurnTranscript(messages);
     if (!shouldCaptureTurn(transcript)) {
-      log("captureTurn: transcript below min-chars, skipping");
       log("captureTurn: skipped — transcript below min-chars");
       lastCaptured.set(sessionID, turnId);
       return;
     }
 
-    if (transcript === null) return;
     log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
     await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
     lastCaptured.set(sessionID, turnId);
