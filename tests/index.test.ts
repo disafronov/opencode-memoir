@@ -67,6 +67,46 @@ describe("MemoirOpenCode factory", () => {
     }
   });
 
+  it("waits for promptAsync acceptance but not subagent execution", async () => {
+    const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
+    process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
+    try {
+      let acceptPrompt!: () => void;
+      const accepted = new Promise<void>((resolve) => {
+        acceptPrompt = resolve;
+      });
+      const client = {
+        session: {
+          messages: async () => ({
+            data: [
+              { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "hello" }] },
+              { info: { id: "a1", role: "assistant" }, parts: [{ type: "text", text: "hi" }] },
+            ],
+          }),
+          promptAsync: () => accepted,
+        },
+      };
+      const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
+      let finished = false;
+      const hookRun = hooks["chat.message"](
+        { sessionID: "parent" },
+        { parts: [{ type: "text", text: "next" }] },
+      ).then(() => {
+        finished = true;
+      });
+
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.strictEqual(finished, false);
+      acceptPrompt();
+      await hookRun;
+      assert.strictEqual(finished, true);
+      await hooks.dispose();
+    } finally {
+      if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
+      else process.env.MEMOIR_CAPTURE_MIN_CHARS = previousMin;
+    }
+  });
+
   it("ignores memoir subtask and synthetic messages for capture", async () => {
     let prompts = 0;
     const client = {

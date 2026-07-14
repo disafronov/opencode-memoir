@@ -23,6 +23,9 @@ npx tsx --test tests/store.test.ts
 
 # Full verification (what CI runs)
 # lint_and_test.yaml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
+
+# Equivalent via Makefile
+make all                # lint → typecheck → test → build
 ```
 
 **Biome** is the linter and formatter (`@biomejs/biome`). CI runs `npx biome ci src/ tests/` which is stricter than `biome check`.
@@ -43,25 +46,25 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 |------|------:|------|
 | `src/index.ts` | ~330 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
 | `src/mcp-client.ts` | ~310 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
-| `src/subagent.ts` | ~165 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + runner + model fallback resolution |
-| `src/capture.ts` | ~235 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch dedup/retry |
+| `src/subagent.ts` | ~160 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + supported `promptAsync` runner + model fallback resolution |
+| `src/capture.ts` | ~235 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch retry, and dedup |
 | `src/capture-lifecycle.ts` | ~60 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
-| `src/prompts.ts` | ~25 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
-| `src/store.ts` | ~71 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
-| `src/path.ts` | ~40 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
-| `src/turn-status.ts` | ~20 | Builds the compact per-turn model status from the `memoir_status` response |
+| `src/prompts.ts` | ~20 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
+| `src/store.ts` | ~75 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
+| `src/path.ts` | ~50 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
+| `src/turn-status.ts` | ~15 | Builds the compact per-turn model status from the `memoir_status` response |
 | `src/debug.ts` | ~60 | File logger: `infoLog` (always) + `debugLog` (`MEMOIR_DEBUG=1`); dest via `MEMOIR_LOG` |
 
 ### Hooks
 
 - **`config`** — Registers the `memoir` subagent (`memoir_*` allowed except store-global checkout, every non-Memoir tool denied), the `/memoir:onboard` slash command, and the project-scoped `memoir` remote MCP server
 - **`shell.env`** — Injects `MEMOIR_STORE` into shell environment
-- **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, and refreshes the compact model status; ignores synthetic and memoir-child messages so capture cannot trigger itself
+- **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, refreshes the compact model status, and waits for `promptAsync` to accept the visible task; ignores synthetic and memoir-child messages so capture cannot trigger itself
 - **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
 - **`experimental.chat.system.transform`** — Compact current status (every model call in the turn) + startup hint and proactive recall (once/session)
 - **`dispose`** — Saves session markers only when `MEMOIR_AUTO_SAVE=1` is explicit, closes the instance MCP process, and clears pending state
 
-Runtime hook failures are contained and logged; capture itself is fire-and-forget and does not propagate failures into the user turn. Its child session is intentionally visible as a collapsed subagent in the parent timeline, writes through `memoir_remember`, and returns a compact outcome report to the parent task.
+Runtime hook failures are contained and logged. Capture uses OpenCode's supported `promptAsync` input and waits only for its immediate `204 No Content` acceptance; subagent execution remains foreground or native-background according to the OpenCode flags. Its child session is intentionally visible as a collapsed subagent in the parent timeline, writes through `memoir_remember`, and returns a compact outcome report to the parent task.
 
 ## Environment Variables
 
@@ -77,7 +80,7 @@ All optional:
 
 ## Tests
 
-9 test files, 82 tests total — Node built-in test runner via `tsx --test`.
+9 test files, 83 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
@@ -85,7 +88,7 @@ All optional:
 | `tests/subagent.test.ts` | 8 | Model fallback isolation and dynamic Memoir-namespace permissions |
 | `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
 | `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
-| `tests/index.test.ts` | 22 | Module shape, hook behavior, background flag parity, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
+| `tests/index.test.ts` | 23 | Module shape, hook behavior, prompt acceptance ordering, background flag parity, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 5 | Debug gating plus normal file/stderr lifecycle logging |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |

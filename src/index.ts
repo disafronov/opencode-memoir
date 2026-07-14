@@ -130,6 +130,14 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         [MEMOIR_AGENT_NAME]: buildMemoirAgent(agentModel) as unknown as AgentConfig,
       };
       infoLog("memoir subagent registered | model:", agentModel ?? "(opencode default)");
+      infoLog(
+        "memoir capture execution mode:",
+        backgroundSubagentsEnabled() ? "native background" : "foreground",
+        "| OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS:",
+        process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS ?? "(unset)",
+        "| OPENCODE_EXPERIMENTAL:",
+        process.env.OPENCODE_EXPERIMENTAL ?? "(unset)",
+      );
 
       config.command = config.command ?? {};
       config.command["memoir:onboard"] = {
@@ -182,8 +190,11 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         // transcript still ends at the previous completed assistant turn.
         // This deliberate one-turn delay avoids capture triggering its own
         // session activity (and therefore recursively triggering itself).
-        infoLog("chat.message: firing capture for previous completed turn", sid);
-        void dispatchCapture(sid);
+        // promptAsync returns 204 after forking the prompt in OpenCode. Await
+        // that acceptance so the visible capture task is queued before this
+        // hook releases the parent prompt; subagent execution is not awaited.
+        infoLog("chat.message: submitting capture for previous completed turn", sid);
+        await dispatchCapture(sid);
       } catch (e) {
         debugLog("chat.message: failed:", errorMessage(e));
       }

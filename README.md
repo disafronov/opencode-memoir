@@ -80,7 +80,7 @@ All optional:
 |---|---|
 | `config` | Registers the `memoir` subagent, one project-scoped `memoir-mcp` remote MCP server, and the `/memoir:onboard` slash command |
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
-| `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; ignores synthetic and memoir-child messages |
+| `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; waits for `promptAsync` to accept the visible capture task while ignoring synthetic and memoir-child messages |
 | `tool.execute.before` | Marks memoir's `task` invocation with `background: true` when OpenCode background subagents are enabled |
 | `tool.execute.after` + `event` | Tracks foreground completion and known background child idle/error events so checkout does not overlap an active capture |
 | `experimental.chat.system.transform` | Compact status after real parent messages + startup hint and proactive recall once per session |
@@ -90,7 +90,7 @@ All optional:
 
 Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a **remote** MCP server — one HTTP process per plugin/project instance. All memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the main LLM.
 
-Capturing is done by a dedicated visible, collapsible `memoir` subagent. It can use the dynamic `memoir_*` tool namespace except for the store-global `memoir_memoir_checkout`; branch checkout remains owned by the plugin so a subagent cannot move the shared store. Every non-Memoir tool remains denied. The capture task includes the live MCP tool names and descriptions so a small local model does not have to infer the catalog. Deterministic settings keep it suitable for that model. On each real `chat.message`, the plugin captures the previous completed turn: the incoming user message has not entered the transcript yet. This one-turn delay prevents capture activity from triggering another capture.
+Capturing is done by a dedicated visible, collapsible `memoir` subagent. It can use the dynamic `memoir_*` tool namespace except for the store-global `memoir_memoir_checkout`; branch checkout remains owned by the plugin so a subagent cannot move the shared store. Every non-Memoir tool remains denied. The capture task includes the live MCP tool names and descriptions so a small local model does not have to infer the catalog. Deterministic settings keep it suitable for that model. On each real `chat.message`, the plugin captures the previous completed turn: the incoming user message has not entered the transcript yet. This one-turn delay prevents capture activity from triggering another capture. Capture is submitted as a supported `SubtaskPartInput` through `promptAsync`; the hook waits for OpenCode's immediate `204 No Content` acceptance, not for subagent execution. When native background subagents are enabled, `tool.execute.before` adds `background: true` before `TaskTool.execute` starts the child.
 
 The subagent is instructed to finish with a compact report of confirmed writes (`Captured N memories`, taxonomy paths, and brief reasons), or a single reason why nothing was captured. OpenCode returns that report to the parent agent through the normal task result. The prompt requires the report to reflect actual tool outcomes rather than intended writes.
 
