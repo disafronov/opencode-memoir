@@ -74,7 +74,7 @@ All optional:
 - `MEMOIR_DEBUG=1` — Adds verbose diagnostics and passed `Error` stacks. Without it, normal lifecycle entries and concise error messages are still logged.
 - `MEMOIR_LOG` — Log destination: unset → `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log` (daily rotation, never stderr); `stderr` → live stderr (local debugging); any other value → explicit file path. Logs never pollute the opencode terminal by default.
 - `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
-- `MEMOIR_AUTO_SAVE` — Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable
+- `MEMOIR_AUTO_SAVE` — **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it. Separate from that, persisting per-session markers at `dispose` only happens when this is set **explicitly to `1`** — by default the dispose-time markers are not written.
 - `MEMOIR_AGENT_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
 - `MEMOIR_CAPTURE_MIN_CHARS` — Local, LLM-free pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything)
 - `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` — Dedicated native-background flag. If unset, OpenCode and the plugin fall back to `OPENCODE_EXPERIMENTAL`; explicit `false` overrides the umbrella flag

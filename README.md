@@ -69,7 +69,7 @@ All optional:
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Add verbose diagnostics and error stacks to the configured Memoir log; without it, normal lifecycle and concise error messages are still logged |
 | `MEMOIR_LOG` | Log destination: unset uses `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log`; `stderr` enables live stderr; any other value is an explicit file path |
-| `MEMOIR_AUTO_SAVE` | Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable |
+| `MEMOIR_AUTO_SAVE` | **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it. Separate from that, persisting per-session markers at `dispose` only happens when this is set **explicitly to `1`** — by default the dispose-time markers are not written. |
 | `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
 | `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
 | `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` | Optional OpenCode feature flag. Runs capture as a native background job; explicit `false` overrides the umbrella experimental flag |
