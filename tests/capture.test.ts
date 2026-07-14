@@ -138,6 +138,18 @@ describe("buildTurnCaptureTask", () => {
     assert.doesNotMatch(task, /\{\{TOOLS_SECTION\}\}/);
   });
 
+  it("omits checkout from the capture tool catalog", () => {
+    const task = buildTurnCaptureTask("durable transcript", [
+      { name: "memoir_memoir_remember", description: "Store memory" },
+      { name: "memoir_memoir_checkout", description: "Switch branch" },
+      { name: "memoir_memoir_get", description: "Read memory" },
+    ]);
+    assert.match(task, /memoir_memoir_remember/);
+    assert.match(task, /memoir_memoir_get/);
+    assert.doesNotMatch(task, /memoir_memoir_checkout/);
+    assert.doesNotMatch(task, /Switch branch/);
+  });
+
   it("retries a turn after prompt dispatch fails", async () => {
     const prevMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
     process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
