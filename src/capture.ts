@@ -1,7 +1,7 @@
 import { debugLog, infoLog } from "./debug.js";
 import type { MemoirToolInfo } from "./mcp-client.js";
 import { loadPrompt } from "./prompts.js";
-import { runMemoirSubagent } from "./subagent.js";
+import { MEMOIR_CHECKOUT_TOOL, runMemoirSubagent } from "./subagent.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,8 +144,9 @@ const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
  * each fact with an explicit 3-level taxonomy path (no classifier guessing).
  */
 export function buildTurnCaptureTask(transcript: string, tools: MemoirToolInfo[] = []): string {
-  const toolsSection = tools.length
-    ? `Available memory tools (name — what it does):\n${tools
+  const captureTools = tools.filter((tool) => tool.name !== MEMOIR_CHECKOUT_TOOL);
+  const toolsSection = captureTools.length
+    ? `Available memory tools (name — what it does):\n${captureTools
         .map((tool) => `- ${tool.name} — ${tool.description}`)
         .join("\n")}\n`
     : "";
