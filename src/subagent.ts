@@ -6,8 +6,9 @@ import { loadPrompt } from "./prompts.js";
 // ruleset (NOT a `tools` allowlist — that field is ignored for config agents).
 // `visibleTools` hides a tool only when the LAST rule matching its name has
 // `{ pattern: "*", action: "deny" }`. So we deny "*" first, then re-allow
-// the memoir_* MCP tools (and doom_loop) after it. Order matters: the
-// re-allows must come AFTER "*" so findLast resolves in their favor.
+// the memoir_* MCP tools (and doom_loop) after it, then deny checkout. Order
+// matters: the specific checkout deny must be LAST so findLast keeps branch
+// ownership in the plugin while every other memoir tool remains available.
 //
 // The SDK's AgentConfig.permission type is narrower than what opencode's
 // runtime accepts (object form → Permission.fromConfig), hence the loose
@@ -19,6 +20,7 @@ export type MemoirAgentSpec = AgentConfig & {
 };
 
 export const MEMOIR_AGENT_NAME = "memoir";
+export const MEMOIR_CHECKOUT_TOOL = "memoir_memoir_checkout";
 
 // System prompt for the memoir subagent, loaded from prompts/subagent-system.tmpl.
 // It is intentionally tool-free: the subagent is locked to the memoir_* tools
@@ -31,12 +33,14 @@ const MEMOIR_AGENT_PROMPT = loadPrompt("subagent-system.tmpl");
 /**
  * Build the memoir subagent config.
  *
- * Locked to memoir_* tools only (everything else denied) so it can never
- * touch the filesystem, shell, or network. opencode restricts an agent's
- * tools through its `permission` ruleset — see MemoirAgentSpec for why the
- * `*` deny must precede the `memoir_*` allow. Mode "subagent" makes
- * opencode spawn it as a detached child session (invisible in the parent
- * timeline) when prompted via client.session.prompt({ body: { agent: "memoir" } }).
+ * Locked to memoir_* tools except checkout (everything else denied) so it can
+ * never touch the filesystem, shell, network, or the store-global branch.
+ * opencode restricts an agent's tools through its `permission` ruleset — see
+ * MemoirAgentSpec for why the checkout deny must follow the broad allow. Mode
+ * "subagent" makes
+ * opencode spawn it as a detached child session, rendered as a collapsed task
+ * (visible in the parent timeline) when prompted via
+ * client.session.prompt({ body: { agent: "memoir" } }).
  */
 export function buildMemoirAgent(model?: string): MemoirAgentSpec {
   const agent: MemoirAgentSpec = {
@@ -44,7 +48,13 @@ export function buildMemoirAgent(model?: string): MemoirAgentSpec {
     description:
       "Memoir memory agent — captures durable facts and recalls prior context via the memoir MCP server.",
     prompt: MEMOIR_AGENT_PROMPT,
-    permission: { "*": "deny", doom_loop: "allow", "memoir_*": "allow" },
+    permission: {
+      "*": "deny",
+      doom_loop: "allow",
+      "memoir_*": "allow",
+      [MEMOIR_CHECKOUT_TOOL]: "deny",
+    },
+    temperature: 0,
     steps: 8,
   };
   if (model) agent.model = model;
@@ -70,10 +80,13 @@ interface ModelResolution {
  * so we never hand opencode a bare model id it cannot resolve.
  */
 export function resolveMemoirModel(opts: ModelResolution): string | undefined {
-  const env = process.env.MEMOIR_AGENT_MODEL?.trim();
-  const candidate = env || opts.summarizeModel || opts.smallModel || opts.model;
-  if (!candidate) return undefined;
-  return candidate.includes("/") ? candidate : undefined;
+  const candidates = [
+    process.env.MEMOIR_AGENT_MODEL?.trim(),
+    opts.summarizeModel,
+    opts.smallModel,
+    opts.model,
+  ];
+  return candidates.find((candidate) => candidate?.includes("/"));
 }
 
 function errorMessage(e: unknown): string {
@@ -102,10 +115,14 @@ function errorMessage(e: unknown): string {
  * itself forks and returns 204 immediately, so the dispatch stays
  * non-blocking for the caller.
  *
- * Errors are caught and routed to debugLog/infoLog so a failed capture never
- * breaks the user's session.
+ * Errors are logged and rethrown to the capture layer so the turn remains
+ * eligible for retry; the fire-and-forget hook still isolates the user session.
  */
-export function runMemoirSubagent(client: unknown, parentSessionID: string, task: string): void {
+export async function runMemoirSubagent(
+  client: unknown,
+  parentSessionID: string,
+  task: string,
+): Promise<void> {
   type SubtaskPart = {
     type: "subtask";
     agent: string;
@@ -121,11 +138,11 @@ export function runMemoirSubagent(client: unknown, parentSessionID: string, task
   const api = (client as { session?: { promptAsync?: PromptAsync } } | null | undefined)?.session;
   if (!api?.promptAsync) {
     debugLog("runMemoirSubagent: client.session.promptAsync unavailable");
-    return;
+    throw new Error("client.session.promptAsync unavailable");
   }
 
-  void api
-    .promptAsync({
+  try {
+    await api.promptAsync({
       path: { id: parentSessionID },
       body: {
         parts: [
@@ -138,10 +155,11 @@ export function runMemoirSubagent(client: unknown, parentSessionID: string, task
           },
         ],
       },
-    })
-    .catch((e: unknown) => {
-      debugLog("runMemoirSubagent failed:", errorMessage(e));
-      infoLog("memoir subagent dispatch FAILED:", errorMessage(e));
     });
-  infoLog("memoir subagent fired (session", parentSessionID, ", task", task.length, "chars)");
+    infoLog("memoir subagent fired (session", parentSessionID, ", task", task.length, "chars)");
+  } catch (e) {
+    debugLog("runMemoirSubagent failed:", errorMessage(e));
+    infoLog("memoir subagent dispatch FAILED:", errorMessage(e));
+    throw e;
+  }
 }

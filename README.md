@@ -63,7 +63,7 @@ All optional:
 |---|---|
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Emit diagnostic logs to stderr (prefixed `[memoir]`) |
-| `MEMOIR_AUTO_SAVE` | Per-turn capture + final capture on dispose. **Enabled by default**; set `=0` to disable |
+| `MEMOIR_AUTO_SAVE` | Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable |
 | `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
 | `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
 | `MEMOIR_REMINDER_INTERVAL=N` | Periodic save/recall reminder every N messages (default: 5, 0 to disable) |
@@ -73,21 +73,22 @@ All optional:
 
 | Hook | Purpose |
 |---|---|
-| `config` | Registers the `memoir` subagent (capture + recall), the shared `memoir-mcp` remote MCP server, and the `/memoir:onboard` slash command |
+| `config` | Registers the `memoir` subagent, one project-scoped `memoir-mcp` remote MCP server, and the `/memoir:onboard` slash command |
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
-| `chat.message` | Increments message counter; auto-matches memoir branch; fire-and-forget captures the completed turn via the `memoir` subagent |
+| `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; ignores synthetic and memoir-child messages |
 | `tool.execute.before` | Marks memoir's `task` invocation with `background: true` when OpenCode background subagents are enabled |
 | `experimental.chat.system.transform` | Startup hint (once/session) + proactive recall (`memoir_summarize` injected as prior context) + periodic reminder |
-| `dispose` | Fires a final capture of each session; optionally saves a session marker; clears all pending state |
+| `dispose` | Optionally saves session markers, closes the project MCP process, and clears instance state |
 
 ## How it works
 
-Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a **remote** MCP server — a single shared HTTP process spawned by the plugin. All memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the LLM.
+Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a **remote** MCP server — one HTTP process per plugin/project instance. All memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the main LLM.
 
-Capturing is done by a dedicated `memoir` subagent (mode `subagent`, restricted to `memoir_*` tools). On each completed turn, `chat.message` dispatches a `task` for that subagent.
+Capturing is done by a dedicated visible, collapsible `memoir` subagent. It can use the dynamic `memoir_*` tool namespace except for the store-global `memoir_memoir_checkout`; branch checkout remains owned by the plugin so a subagent cannot move the shared store. Every non-Memoir tool remains denied. The capture task includes the live MCP tool names and descriptions so a small local model does not have to infer the catalog. Deterministic settings keep it suitable for that model. On each real `chat.message`, the plugin captures the previous completed turn: the incoming user message has not entered the transcript yet. This one-turn delay prevents capture activity from triggering another capture.
 
 - With `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`, the plugin adds `background: true` in `tool.execute.before`. OpenCode runs the child through its native `BackgroundJob` path and immediately releases the parent session.
 - Without the flag, the plugin does not add `background`; OpenCode runs the same capture task through the original foreground subagent path. Memory capture remains available, but the parent session may wait for it to finish.
+- Before changing the shared memoir branch, the plugin waits for active foreground tasks (`tool.execute.after`) and native background tasks (the known child session's terminal idle/error event). A timeout defers checkout instead of moving the store underneath a running capture.
 
 At session start, `experimental.chat.system.transform` injects a recall hint plus a `memoir_summarize` snapshot so the agent begins with prior context.
 
@@ -104,6 +105,7 @@ At session start, `experimental.chat.system.transform` injects a recall hint plu
 npm install
 npm run build    # typecheck + emit dist
 npm test         # run the test suite
+npm run test:coverage # optional source coverage report
 ```
 
 ### Source layout
@@ -111,7 +113,8 @@ npm test         # run the test suite
 | File | Responsibility |
 |---|---|
 | `src/index.ts` | Plugin entry: MCP registration + all hooks + dispose |
-| `src/store.ts` | Store path derivation, branch auto-match, `callMemoir` CLI helper |
+| `src/mcp-client.ts` | Project-scoped MCP process/client lifecycle and tool calls |
+| `src/store.ts` | Store path derivation and serialized store-branch matching |
 | `src/memory-saver.ts` | Per-session message counter for periodic reminders |
 | `src/debug.ts` | Conditional stderr logger (`MEMOIR_DEBUG=1`) |
 

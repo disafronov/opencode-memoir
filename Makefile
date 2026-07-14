@@ -1,4 +1,4 @@
-.PHONY: help install lint lint-fix format typecheck test build clean all
+.PHONY: help install lint lint-fix format typecheck test coverage build clean all
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -21,6 +21,9 @@ typecheck: ## Run TypeScript type checking
 
 test: ## Run tests
 	NODE_ENV=test npx tsx --test tests/*.test.ts
+
+coverage: ## Run tests with a source coverage report
+	npm run test:coverage
 
 build: ## Build the plugin (typecheck + bundle)
 	npm run build

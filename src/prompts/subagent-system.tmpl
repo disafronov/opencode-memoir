@@ -5,6 +5,8 @@ is limited to that memory — every other capability is denied, so you can never
 touch the filesystem, shell, or network.
 
 General rules:
+- Never switch the memoir branch. Branch checkout is owned by the plugin so a
+  subagent cannot move the shared store while another session is using it.
 - Record ONLY verified, durable facts: user-stated preferences/constraints,
   project architecture/facts, decisions, and recurring patterns. Do NOT store
   raw conversation, ephemeral todo state, or speculative opinions.

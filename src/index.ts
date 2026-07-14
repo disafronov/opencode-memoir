@@ -1,30 +1,14 @@
 import type { Config, Plugin, PluginInput, PluginModule } from "@opencode-ai/plugin";
 import type { AgentConfig } from "@opencode-ai/sdk";
 import { captureTurn } from "./capture.js";
+import { CaptureLifecycle } from "./capture-lifecycle.js";
 import { debugLog, infoLog } from "./debug.js";
-import {
-  callMemoirTool,
-  closeMemoirClient,
-  getMemoirClient,
-  listMemoirTools,
-  type MemoirToolInfo,
-  startMemoirHttpServer,
-} from "./mcp-client.js";
-import { incrementMsgCount, pruneAll, sessionMsgCount, shouldRemind } from "./memory-saver.js";
+import { callMemoirTool, MemoirRuntime } from "./mcp-client.js";
+import { MemorySaver, shouldRemind } from "./memory-saver.js";
 import { safeRealpath } from "./path.js";
 import { loadPrompt } from "./prompts.js";
-import {
-  autoMatchMemoirBranch,
-  deriveStorePath,
-  pruneBranchCache,
-  setPluginStoreOverride,
-} from "./store.js";
+import { deriveStorePath, MemoirBranchMatcher } from "./store.js";
 import { buildMemoirAgent, MEMOIR_AGENT_NAME, resolveMemoirModel } from "./subagent.js";
-
-const sessionsWithStartupHint = new Set<string>();
-// Per-session id of the last captured assistant message — dedupes capture
-// so a turn is written to memoir at most once.
-const lastCaptured = new Map<string, string>();
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -46,14 +30,12 @@ function backgroundSubagentsEnabled(): boolean {
 
 const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const opts = (rawOptions ?? {}) as { store?: string };
-  if (opts.store) setPluginStoreOverride(opts.store);
-
-  const storePath = deriveStorePath();
   // SDK client (for subagent spawning + transcript reads) and working dir come
   // from the plugin input. Guard for callers that pass no input.
   const pluginInput = (input ?? {}) as PluginInput;
   const sdkClient = pluginInput.client;
   const directory = safeRealpath(pluginInput.directory ?? process.cwd());
+  const storePath = deriveStorePath(directory, opts.store);
 
   const mcpCommand = ["memoir-mcp"];
   if (storePath) {
@@ -61,6 +43,14 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   }
 
   const environment = storePath ? { MEMOIR_STORE: storePath } : undefined;
+  const runtime = new MemoirRuntime(mcpCommand, environment, directory);
+  const branchMatcher = new MemoirBranchMatcher();
+  const sessionsWithStartupHint = new Set<string>();
+  const parentSessions = new Set<string>();
+  const lastCaptured = new Map<string, string>();
+  const capturePending = new Set<string>();
+  const captureLifecycle = new CaptureLifecycle();
+  const memorySaver = new MemorySaver();
 
   // The plugin owns a single shared memoir-mcp HTTP server (started in the
   // config hook). opencode connects to it as a remote MCP server; the plugin's
@@ -72,21 +62,32 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   // Lazily connected on first use so merely loading the plugin — or running
   // hooks that never touch memoir — spawns no subprocess.
   const connectClient = async () => {
+    if (process.env.NODE_ENV === "test") return null;
     try {
-      return await getMemoirClient(mcpCommand, environment);
+      return await runtime.connect();
     } catch (e) {
       debugLog("plugin: failed to connect memoir client:", errorMessage(e));
       return null;
     }
   };
 
-  // Fetch the live memoir tool catalog once (cached in mcp-client). Skipped in
-  // tests so the config/chat hooks never reach for a real server. Returns []
-  // on any failure so callers degrade to a tool-free prompt.
-  const discoverMemoirTools = async (): Promise<MemoirToolInfo[]> => {
-    if (process.env.NODE_ENV === "test") return [];
+  const discoverTools = async () => {
     const client = await connectClient();
-    return client ? listMemoirTools(client) : [];
+    return client ? runtime.listTools(client) : [];
+  };
+
+  const dispatchCapture = async (sid: string): Promise<void> => {
+    if (!sdkClient || !parentSessions.has(sid) || capturePending.has(sid)) return;
+    capturePending.add(sid);
+    try {
+      const client = await connectClient();
+      if (client) await branchMatcher.match(client, directory, () => captureLifecycle.drain());
+      await captureTurn(sdkClient, sid, directory, lastCaptured, await discoverTools());
+    } catch (e) {
+      debugLog("dispatchCapture failed:", errorMessage(e));
+    } finally {
+      capturePending.delete(sid);
+    }
   };
 
   const hooks: Record<string, unknown> = {
@@ -96,7 +97,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
 
       try {
-        const url = await startMemoirHttpServer(mcpCommand, environment, directory);
+        const url = await runtime.start();
         mcpServer = { type: "remote", url: url.toString(), enabled: true };
         infoLog("memoir MCP server registered at", url.toString(), "| store:", storePath);
       } catch (e) {
@@ -151,32 +152,43 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
 
     "chat.message": async (
       input: { sessionID: string; agent?: string; messageID?: string; variant?: string },
-      _output: { parts?: Array<{ type: string; text: string }> },
+      output: {
+        parts?: Array<{ type: string; text?: string; synthetic?: boolean; agent?: string }>;
+      },
     ): Promise<void> => {
       try {
         const sid = input.sessionID ?? "default";
-        incrementMsgCount(sid);
+        const parts = output.parts ?? [];
+        const isMemoirSubtask = parts.some(
+          (part) => part.type === "subtask" && part.agent === MEMOIR_AGENT_NAME,
+        );
+        const isSynthetic = parts.length > 0 && parts.every((part) => part.synthetic === true);
+        if (input.agent === MEMOIR_AGENT_NAME || isMemoirSubtask || isSynthetic) return;
+
+        parentSessions.add(sid);
+        memorySaver.increment(sid);
 
         const client = await connectClient();
-        if (client) {
-          await autoMatchMemoirBranch(client, sid);
-        }
+        if (client) await branchMatcher.match(client, directory, () => captureLifecycle.drain());
 
-        // Fire-and-forget: capture the just-completed turn into memoir via the
-        // subagent. Never await — a slow/down model must not stall the user.
-        infoLog("chat.message: firing capture for session", sid);
-        void captureTurn(sdkClient, sid, directory, lastCaptured, await discoverMemoirTools());
+        // chat.message runs before the new user message is persisted, so the
+        // transcript still ends at the previous completed assistant turn.
+        // This deliberate one-turn delay avoids capture triggering its own
+        // session activity (and therefore recursively triggering itself).
+        infoLog("chat.message: firing capture for previous completed turn", sid);
+        void dispatchCapture(sid);
       } catch (e) {
         debugLog("chat.message: failed:", errorMessage(e));
       }
     },
 
     "tool.execute.before": async (
-      input: { tool: string },
+      input: { tool: string; callID: string },
       output: { args?: Record<string, unknown> },
     ): Promise<void> => {
       try {
         if (input.tool !== "task" || output.args?.subagent_type !== MEMOIR_AGENT_NAME) return;
+        captureLifecycle.begin(input.callID);
         if (!backgroundSubagentsEnabled()) {
           debugLog(
             "memoir task remains foreground: OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS is disabled",
@@ -195,6 +207,35 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       }
     },
 
+    "tool.execute.after": async (
+      input: { tool: string; callID: string; args?: Record<string, unknown> },
+      output?: { metadata?: { background?: boolean; sessionId?: string } },
+    ): Promise<void> => {
+      try {
+        if (input.tool !== "task" || input.args?.subagent_type !== MEMOIR_AGENT_NAME) return;
+        const childSessionID = output?.metadata?.sessionId;
+        if (output?.metadata?.background === true && childSessionID) {
+          captureLifecycle.background(input.callID, childSessionID);
+          return;
+        }
+        captureLifecycle.finishCall(input.callID);
+      } catch (e) {
+        debugLog("tool.execute.after: failed:", errorMessage(e));
+        captureLifecycle.finishCall(input.callID);
+      }
+    },
+
+    event: async (input: { event?: { type?: string; properties?: { sessionID?: string } } }) => {
+      try {
+        const event = input.event;
+        if (event?.type !== "session.idle" && event?.type !== "session.error") return;
+        const sessionID = event.properties?.sessionID;
+        if (sessionID) captureLifecycle.finishSession(sessionID);
+      } catch (e) {
+        debugLog("event: failed:", errorMessage(e));
+      }
+    },
+
     "experimental.chat.system.transform": async (
       input: { sessionID?: string },
       output: { system?: string[] },
@@ -202,7 +243,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       try {
         const sid = input.sessionID ?? "default";
 
-        if (input.sessionID && !sessionsWithStartupHint.has(sid)) {
+        if (input.sessionID && parentSessions.has(sid) && !sessionsWithStartupHint.has(sid)) {
           sessionsWithStartupHint.add(sid);
           infoLog("system.transform: startup hint injected for session", sid);
 
@@ -239,7 +280,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
           }
         }
 
-        const count = sessionMsgCount.get(sid) ?? 0;
+        const count = memorySaver.get(sid);
         if (shouldRemind(count)) {
           // Text in prompts/reminder.tmpl; tool-free by design (see hint above).
           output.system?.push(loadPrompt("reminder.tmpl"));
@@ -251,19 +292,10 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
 
     dispose: async (): Promise<void> => {
       try {
-        // Final capture of the session's last turn before teardown.
-        if (sdkClient) {
-          const tools = await discoverMemoirTools();
-          for (const sid of lastCaptured.keys()) {
-            infoLog("dispose: final capture for session", sid);
-            void captureTurn(sdkClient, sid, directory, lastCaptured, tools);
-          }
-        }
-
         if (process.env.MEMOIR_AUTO_SAVE === "1") {
           const client = await connectClient();
           if (client) {
-            for (const [sid, count] of sessionMsgCount) {
+            for (const [sid, count] of memorySaver.counts) {
               await callMemoirTool(client, "memoir_remember", {
                 content: `Session ended — ${count} user messages exchanged`,
                 path: `session.${sid}`,
@@ -276,10 +308,13 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         debugLog("dispose: save failed:", errorMessage(e));
       }
       sessionsWithStartupHint.clear();
-      pruneBranchCache();
-      pruneAll();
+      parentSessions.clear();
+      capturePending.clear();
+      captureLifecycle.clear();
+      branchMatcher.clear();
+      memorySaver.clear();
       lastCaptured.clear();
-      await closeMemoirClient();
+      await runtime.close();
     },
   };
 

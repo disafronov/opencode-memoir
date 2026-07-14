@@ -136,10 +136,6 @@ export function shouldCaptureTurn(
 // Task builder (mirrors plugins/claude-code/hooks/stop_capture.tmpl)
 // ---------------------------------------------------------------------------
 
-// Capture task template, loaded from prompts/capture-task.tmpl. The live tool
-// catalog (names + descriptions) is injected as {{TOOLS_SECTION}} from the
-// memoir server so the task always reflects the actual tools — no hardcoded
-// list. When `tools` is empty the catalog section is omitted.
 const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
 
 /**
@@ -148,12 +144,12 @@ const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
  * each fact with an explicit 3-level taxonomy path (no classifier guessing).
  */
 export function buildTurnCaptureTask(transcript: string, tools: MemoirToolInfo[] = []): string {
-  const toolSection = tools.length
+  const toolsSection = tools.length
     ? `Available memory tools (name — what it does):\n${tools
-        .map((t) => `- ${t.name} — ${t.description}`)
+        .map((tool) => `- ${tool.name} — ${tool.description}`)
         .join("\n")}\n`
     : "";
-  return CAPTURE_TASK_TEMPLATE.replace("{{TOOLS_SECTION}}", toolSection).replace(
+  return CAPTURE_TASK_TEMPLATE.replace("{{TOOLS_SECTION}}", toolsSection).replace(
     "{{TRANSCRIPT}}",
     transcript,
   );
@@ -184,7 +180,6 @@ function lastAssistantMessageId(messages: ChatMessage[]): string | null {
  * @param directory working directory for the child session (unused — the
  *   running opencode instance is already bound to it; kept for call stability)
  * @param lastCaptured per-session map of already-captured assistant ids
- * @param tools    live memoir tool catalog, injected into the subagent task
  */
 export async function captureTurn(
   client: unknown,
@@ -230,10 +225,10 @@ export async function captureTurn(
       return;
     }
 
-    lastCaptured.set(sessionID, turnId);
     if (transcript === null) return;
     infoLog("captureTurn: dispatching memoir subagent (transcript", transcript.length, "chars)");
-    runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
+    await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
+    lastCaptured.set(sessionID, turnId);
   } catch (e) {
     debugLog("captureTurn failed:", errorMessage(e));
   }

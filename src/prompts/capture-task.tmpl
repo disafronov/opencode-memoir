@@ -2,17 +2,19 @@ Capture durable memories from the following completed turn.
 
 Follow these rules exactly:
 1. SILENT — do not reply to the user; just write memories.
-2. Keep ONLY durable, verified facts:
+2. If there are no durable facts, make no tool calls and stop.
+3. Keep ONLY durable, verified facts:
    - user-stated preferences / constraints
    - project architecture, conventions, decisions
    - recurring patterns or corrections
-3. DROP: ephemeral todo state, raw command output, speculative opinions,
+4. DROP: ephemeral todo state, raw command output, speculative opinions,
    anything you inferred rather than observed.
-4. For every fact, store it at an EXPLICIT 3-level taxonomy path
+5. For every fact, store it at an EXPLICIT 3-level taxonomy path
    (e.g. preferences.coding.languages, project.architecture.layout,
    decisions.api.auth). Do not let any classifier invent the path.
-5. Before writing a path that may already exist, read it first and update in
+6. Before writing a path that may already exist, read it first and update in
    place instead of duplicating.
+7. Never delete memories or switch branches.
 
 {{TOOLS_SECTION}}
 Store in the default namespace.

@@ -9,25 +9,19 @@ interface MemoirClientState {
   client: Client;
 }
 
-let state: MemoirClientState | null = null;
-let connecting: Promise<Client> | null = null;
-
-// Discovered memoir tool catalog (name + description), cached so we hit the
-// server only once per process. Invalidated together with the client.
-let cachedTools: MemoirToolInfo[] | null = null;
-
-/** A single discovered memoir MCP tool: its name and human description. */
-export interface MemoirToolInfo {
+export type MemoirToolInfo = {
   name: string;
   description: string;
-}
+};
 
-// Single shared memoir-mcp HTTP server, spawned and owned by the plugin.
-// Both opencode (registered as a remote MCP server) and the plugin's own
-// internal client connect to this one process — no second stdio spawn.
-let serverProc: ChildProcess | null = null;
-let serverUrl: URL | null = null;
-let startingServer: Promise<URL> | null = null;
+type ClientConnection = {
+  client: Client;
+  transport: StreamableHTTPClientTransport;
+};
+
+export type MemoirRuntimeDependencies = {
+  createClientConnection?: (url: URL) => ClientConnection;
+};
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -80,161 +74,206 @@ function waitForPort(port: number, timeoutMs = 10_000): Promise<void> {
   });
 }
 
-function cleanup(): void {
-  state = null;
-  connecting = null;
-  cachedTools = null;
-}
-
 /**
- * Start the shared memoir-mcp HTTP server on a random free high port and wait
- * until it is listening. Returns the Streamable HTTP URL other clients connect to.
- * Idempotent and concurrency-safe: concurrent callers share one start promise.
+ * One memoir-mcp process and internal MCP client owned by one plugin instance.
+ * OpenCode can host several project directories in one process, so none of
+ * this state may live at module scope.
  */
-export async function startMemoirHttpServer(
-  command: string[],
-  env?: Record<string, string>,
-  cwd?: string,
-): Promise<URL> {
-  if (serverUrl && serverProc) return serverUrl;
-  if (startingServer) return startingServer;
+export class MemoirRuntime {
+  private state: MemoirClientState | null = null;
+  private connecting: Promise<Client> | null = null;
+  private serverProc: ChildProcess | null = null;
+  private serverUrl: URL | null = null;
+  private serverPort: number | null = null;
+  private startingServer: Promise<URL> | null = null;
+  private tools: MemoirToolInfo[] | null = null;
 
-  startingServer = (async () => {
-    // In tests, skip spawning a real server — just hand back a placeholder URL.
-    if (process.env.NODE_ENV === "test") {
-      return new URL("http://127.0.0.1:9/mcp");
-    }
+  constructor(
+    private readonly command: string[],
+    private readonly env?: Record<string, string>,
+    private readonly cwd?: string,
+    private readonly dependencies: MemoirRuntimeDependencies = {},
+  ) {}
 
-    const port = await pickFreeHighPort();
-    const url = new URL(`http://127.0.0.1:${port}/mcp`);
+  private cleanupClient(): void {
+    this.state = null;
+    this.connecting = null;
+    this.tools = null;
+  }
 
-    // HTTP flags appended to the base command (which already carries --store).
-    const args = [...command.slice(1), "--http", "--host", "127.0.0.1", "--port", String(port)];
+  async start(): Promise<URL> {
+    if (this.serverUrl && this.serverProc) return this.serverUrl;
+    if (this.startingServer) return this.startingServer;
 
-    const proc = spawn(command[0], args, {
-      // Merge with the parent env so PATH (and other essentials) survive —
-      // passing only `env` would wipe PATH and break command resolution.
-      env: { ...process.env, ...env },
-      // Run in the real (symlink-resolved) project dir so memoir-mcp's
-      // portable store slug is identical whether the repo is entered via a
-      // symlink or its real path.
-      cwd: cwd ? safeRealpath(cwd) : process.cwd(),
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    serverProc = proc;
-
-    // Route the child's stderr to the debug log instead of the UI.
-    if (proc.stderr) {
-      proc.stderr.on("data", (chunk: Buffer) => {
-        if (process.env.MEMOIR_DEBUG === "1") {
-          debugLog("memoir-mcp:", chunk.toString().trimEnd());
-        }
-      });
-    }
-    proc.on("exit", (code) => {
-      debugLog("memoir-mcp HTTP server exited with code", code);
-      serverProc = null;
-      serverUrl = null;
-    });
-    proc.on("error", (e) => {
-      debugLog("memoir-mcp HTTP server error:", errorMessage(e));
-      serverProc = null;
-      serverUrl = null;
-      startingServer = null;
-      throw new Error(`memoir: failed to spawn ${command[0]}: ${errorMessage(e)}`);
-    });
-
-    await waitForPort(port);
-    serverUrl = url;
-    infoLog("memoir-mcp HTTP server up at", url.toString());
-    return url;
-  })();
-
-  return startingServer;
-}
-
-/**
- * Get a lazily-connected singleton MCP client for the shared memoir-mcp HTTP
- * server. Concurrent first-call races share a single connecting promise.
- */
-export async function getMemoirClient(
-  command: string[],
-  env?: Record<string, string>,
-): Promise<Client> {
-  if (state) return state.client;
-
-  if (!connecting) {
-    connecting = (async () => {
-      const url = await startMemoirHttpServer(command, env);
-      const client = new Client(
-        { name: "opencode-memoir", version: "1.0.0" },
-        { capabilities: {} },
-      );
-
-      const transport = new StreamableHTTPClientTransport(url);
-
-      transport.onclose = () => {
-        debugLog("mcp-client: transport closed, resetting state");
-        cleanup();
-      };
-
-      try {
-        await client.connect(transport);
-      } catch (e) {
-        cleanup();
-        throw e;
+    const start = (async () => {
+      // In tests, skip spawning a real server — just hand back a placeholder URL.
+      if (process.env.NODE_ENV === "test") {
+        return new URL("http://127.0.0.1:9/mcp");
       }
 
-      state = { client };
-      return client;
+      // Keep the first selected port for this plugin instance. OpenCode stores
+      // the remote URL during config and cannot be pointed at a new random URL
+      // after a child-process crash.
+      const port = this.serverPort ?? (await pickFreeHighPort());
+      this.serverPort = port;
+      const url = new URL(`http://127.0.0.1:${port}/mcp`);
+
+      // HTTP flags appended to the base command (which already carries --store).
+      const args = [
+        ...this.command.slice(1),
+        "--http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+      ];
+
+      const proc = spawn(this.command[0], args, {
+        // Merge with the parent env so PATH (and other essentials) survive —
+        // passing only `env` would wipe PATH and break command resolution.
+        env: { ...process.env, ...this.env },
+        // Run in the real (symlink-resolved) project dir so memoir-mcp's
+        // portable store slug is identical whether the repo is entered via a
+        // symlink or its real path.
+        cwd: this.cwd ? safeRealpath(this.cwd) : process.cwd(),
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      this.serverProc = proc;
+
+      // Route the child's stderr to the debug log instead of the UI.
+      if (proc.stderr) {
+        proc.stderr.on("data", (chunk: Buffer) => {
+          if (process.env.MEMOIR_DEBUG === "1") {
+            debugLog("memoir-mcp:", chunk.toString().trimEnd());
+          }
+        });
+      }
+      proc.on("exit", (code) => {
+        debugLog("memoir-mcp HTTP server exited with code", code);
+        // close() may already have killed this process and started another.
+        // A late exit from the old child must not wipe the replacement state.
+        if (this.serverProc !== proc) return;
+        this.serverProc = null;
+        this.serverUrl = null;
+        this.startingServer = null;
+        this.cleanupClient();
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        proc.once("spawn", resolve);
+        proc.once("error", reject);
+      }).catch((e: unknown) => {
+        throw new Error(`memoir: failed to spawn ${this.command[0]}: ${errorMessage(e)}`);
+      });
+
+      await waitForPort(port);
+      this.serverUrl = url;
+      infoLog("memoir-mcp HTTP server up at", url.toString());
+      return url;
     })();
-  }
 
-  return connecting;
-}
-
-/** Close the MCP client and stop the shared HTTP server. */
-export async function closeMemoirClient(): Promise<void> {
-  if (state) {
+    this.startingServer = start;
     try {
-      await state.client.close();
+      return await start;
     } catch (e) {
-      debugLog("closeMemoirClient: close failed:", errorMessage(e));
+      this.startingServer = null;
+      this.serverUrl = null;
+      if (this.serverProc) this.serverProc.kill();
+      this.serverProc = null;
+      throw e;
     }
-    cleanup();
   }
-  if (serverProc) {
-    try {
-      serverProc.kill();
-    } catch (e) {
-      debugLog("closeMemoirClient: kill failed:", errorMessage(e));
-    }
-    serverProc = null;
-  }
-  serverUrl = null;
-  startingServer = null;
-  connecting = null;
-  cachedTools = null;
-}
 
-/**
- * Return the memoir server's tool catalog (name + description). The subagent's
- * per-call task prompt is built from this so it always reflects the live
- * server — no hardcoded tool list in source. Cached per process; invalidated
- * when the client/connection is torn down.
- */
-export async function listMemoirTools(client: Client): Promise<MemoirToolInfo[]> {
-  if (cachedTools) return cachedTools;
-  try {
-    const res = await client.listTools();
-    cachedTools = (res.tools ?? []).map((t) => ({
-      name: t.name,
-      description: typeof t.description === "string" ? t.description : "",
-    }));
-    return cachedTools;
-  } catch (e) {
-    debugLog("listMemoirTools failed:", errorMessage(e));
-    return [];
+  /** Get the lazily-connected internal client for this plugin instance. */
+  async connect(): Promise<Client> {
+    if (this.state) return this.state.client;
+
+    if (!this.connecting) {
+      this.connecting = (async () => {
+        const url = await this.start();
+        const { client, transport } = this.dependencies.createClientConnection?.(url) ?? {
+          client: new Client({ name: "opencode-memoir", version: "1.0.0" }, { capabilities: {} }),
+          transport: new StreamableHTTPClientTransport(url),
+        };
+
+        transport.onclose = () => {
+          debugLog("mcp-client: transport closed, resetting state");
+          this.cleanupClient();
+        };
+
+        try {
+          await client.connect(transport);
+        } catch (e) {
+          this.cleanupClient();
+          throw e;
+        }
+
+        this.state = { client };
+        return client;
+      })();
+    }
+
+    return this.connecting;
+  }
+
+  /** Discover the live tool catalog once per connection for the small-model prompt. */
+  async listTools(client: Client): Promise<MemoirToolInfo[]> {
+    if (this.tools) return this.tools;
+    try {
+      const result = await client.listTools();
+      this.tools = (result.tools ?? []).map((tool) => ({
+        // OpenCode exposes remote MCP tools as <server>_<raw-name>. The server
+        // is registered as "memoir", so the prompt must use the same names the
+        // subagent actually sees (for example memoir_memoir_remember).
+        name: `memoir_${tool.name}`,
+        description: typeof tool.description === "string" ? tool.description : "",
+      }));
+      return this.tools;
+    } catch (e) {
+      debugLog("MemoirRuntime.listTools failed:", errorMessage(e));
+      return [];
+    }
+  }
+
+  /** Close the MCP client and stop this instance's HTTP server. */
+  async close(): Promise<void> {
+    if (this.state) {
+      try {
+        await this.state.client.close();
+      } catch (e) {
+        debugLog("closeMemoirClient: close failed:", errorMessage(e));
+      }
+      this.cleanupClient();
+    }
+    if (this.serverProc) {
+      const proc = this.serverProc;
+      this.serverProc = null;
+      try {
+        await new Promise<void>((resolve) => {
+          if (proc.exitCode !== null) {
+            resolve();
+            return;
+          }
+          const timer = setTimeout(resolve, 1_000);
+          timer.unref();
+          proc.once("exit", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          proc.once("error", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          proc.kill();
+        });
+      } catch (e) {
+        debugLog("closeMemoirClient: kill failed:", errorMessage(e));
+      }
+    }
+    this.serverUrl = null;
+    this.startingServer = null;
+    this.connecting = null;
+    this.tools = null;
   }
 }
 

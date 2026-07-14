@@ -1,25 +1,26 @@
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 
-import { incrementMsgCount, pruneAll, sessionMsgCount, shouldRemind } from "../src/memory-saver.ts";
+import { MemorySaver, shouldRemind } from "../src/memory-saver.ts";
 
 describe("incrementMsgCount", () => {
-  afterEach(() => pruneAll());
-
   it("returns 1 on first increment", () => {
-    assert.strictEqual(incrementMsgCount("sess1"), 1);
+    const saver = new MemorySaver();
+    assert.strictEqual(saver.increment("sess1"), 1);
   });
 
   it("increments on subsequent calls", () => {
-    incrementMsgCount("sess1");
-    assert.strictEqual(incrementMsgCount("sess1"), 2);
-    assert.strictEqual(incrementMsgCount("sess1"), 3);
+    const saver = new MemorySaver();
+    saver.increment("sess1");
+    assert.strictEqual(saver.increment("sess1"), 2);
+    assert.strictEqual(saver.increment("sess1"), 3);
   });
 
   it("uses separate count per session", () => {
-    incrementMsgCount("sess1");
-    incrementMsgCount("sess1");
-    assert.strictEqual(incrementMsgCount("sess2"), 1);
+    const saver = new MemorySaver();
+    saver.increment("sess1");
+    saver.increment("sess1");
+    assert.strictEqual(saver.increment("sess2"), 1);
   });
 });
 
@@ -44,9 +45,10 @@ describe("shouldRemind", () => {
 
 describe("pruneAll", () => {
   it("clears all session counts", () => {
-    incrementMsgCount("sess1");
-    incrementMsgCount("sess2");
-    pruneAll();
-    assert.strictEqual(sessionMsgCount.size, 0);
+    const saver = new MemorySaver();
+    saver.increment("sess1");
+    saver.increment("sess2");
+    saver.clear();
+    assert.strictEqual(saver.counts.size, 0);
   });
 });
