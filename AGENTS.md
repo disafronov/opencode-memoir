@@ -44,7 +44,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 ### Source Layout
 
 | File | Lines | Role |
-|------|------:|------|
+| ------ | ------: | ------ |
 | `src/index.ts` | ~330 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
 | `src/mcp-client.ts` | ~310 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
 | `src/subagent.ts` | ~160 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + supported `promptAsync` runner + model fallback resolution |
@@ -84,7 +84,7 @@ All optional:
 9 test files, 86 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
-|------|------:|----------------|
+| ------ | ------: | ---------------- |
 | `tests/store.test.ts` | 13 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
 | `tests/subagent.test.ts` | 10 | Model fallback isolation, dynamic Memoir-namespace permissions, and debug-only submission error details |
 | `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
@@ -104,6 +104,7 @@ functions. These are descriptive measurements, not mandatory CI thresholds.
 ## Build Pipeline
 
 The build first removes `dist/`, then runs two stages:
+
 1. `tsc --declaration --emitDeclarationOnly` — Type declarations
 2. `esbuild` — Bundled ESM, `node:*` and `@opencode-ai/plugin` externalized
 
@@ -121,6 +122,7 @@ The build first removes `dist/`, then runs two stages:
 ## Conventional Commits
 
 Only `feat:`, `fix:`, `perf:`, `revert:`, `refactor:` produce releases. `docs:`/`test:`/`chore:` etc. do not.
+All commits require a `Signed-off-by` trailer; use `git commit --signoff`.
 
 ## TypeScript Patterns
 

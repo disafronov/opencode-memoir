@@ -65,7 +65,7 @@ The plugin delegates store path resolution to `memoir-mcp`. Override via `MEMOIR
 All optional:
 
 | Variable | Effect |
-|---|---|
+| --- | --- |
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Add verbose diagnostics and error stacks to the configured Memoir log; without it, normal lifecycle and concise error messages are still logged |
 | `MEMOIR_LOG` | Log destination: unset uses `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log`; `stderr` enables live stderr; any other value is an explicit file path |
@@ -77,7 +77,7 @@ All optional:
 ## Hooks
 
 | Hook | Purpose |
-|---|---|
+| --- | --- |
 | `config` | Registers the `memoir` subagent, one project-scoped `memoir-mcp` remote MCP server, and the `/memoir:onboard` slash command |
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
 | `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; waits for `promptAsync` to accept the visible capture task while ignoring synthetic and memoir-child messages |
@@ -121,7 +121,7 @@ npm test         # run the test suite
 ### Source layout
 
 | File | Responsibility |
-|---|---|
+| --- | --- |
 | `src/index.ts` | Plugin entry: MCP registration + all hooks + dispose |
 | `src/mcp-client.ts` | Project-scoped MCP process/client lifecycle and tool calls |
 | `src/capture.ts` | Transcript extraction, filtering, task construction, and capture dispatch |
