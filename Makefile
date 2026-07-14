@@ -4,8 +4,11 @@ help: ## Show this help message
 	@echo "Available commands:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-install: ## Install dependencies
+install: ## Install dependencies and pre-commit hooks
+	@echo "Installing dependencies..."
 	npm install
+	@echo "Installing pre-commit hooks..."
+	pre-commit install
 
 lint: ## Run biome check
 	npx biome ci src/ tests/

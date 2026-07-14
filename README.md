@@ -113,7 +113,7 @@ At session start, `experimental.chat.system.transform` injects a recall hint plu
 ### Setup
 
 ```bash
-npm install
+make install     # install dependencies and Git hooks
 npm run build    # typecheck + emit dist
 npm test         # run the test suite
 ```
