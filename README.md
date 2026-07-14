@@ -67,7 +67,7 @@ All optional:
 | Variable | Effect |
 |---|---|
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
-| `MEMOIR_DEBUG=1` | Add verbose diagnostic entries to the configured Memoir log |
+| `MEMOIR_DEBUG=1` | Add verbose diagnostics and error stacks to the configured Memoir log; without it, normal lifecycle and concise error messages are still logged |
 | `MEMOIR_LOG` | Log destination: unset uses `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log`; `stderr` enables live stderr; any other value is an explicit file path |
 | `MEMOIR_AUTO_SAVE` | Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable |
 | `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |

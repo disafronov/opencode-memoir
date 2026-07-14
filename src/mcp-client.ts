@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { createConnection, createServer } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { debugLog, infoLog } from "./debug.js";
+import { log } from "./debug.js";
 import { safeRealpath } from "./path.js";
 
 interface MemoirClientState {
@@ -143,13 +143,11 @@ export class MemoirRuntime {
       // Route the child's stderr to the debug log instead of the UI.
       if (proc.stderr) {
         proc.stderr.on("data", (chunk: Buffer) => {
-          if (process.env.MEMOIR_DEBUG === "1") {
-            debugLog("memoir-mcp:", chunk.toString().trimEnd());
-          }
+          log("memoir-mcp:", chunk.toString().trimEnd());
         });
       }
       proc.on("exit", (code) => {
-        debugLog("memoir-mcp HTTP server exited with code", code);
+        log("memoir-mcp HTTP server exited with code", code);
         // close() may already have killed this process and started another.
         // A late exit from the old child must not wipe the replacement state.
         if (this.serverProc !== proc) return;
@@ -168,7 +166,7 @@ export class MemoirRuntime {
 
       await waitForPort(port);
       this.serverUrl = url;
-      infoLog("memoir-mcp HTTP server up at", url.toString());
+      log("memoir-mcp HTTP server up at", url.toString());
       return url;
     })();
 
@@ -197,7 +195,7 @@ export class MemoirRuntime {
         };
 
         transport.onclose = () => {
-          debugLog("mcp-client: transport closed, resetting state");
+          log("mcp-client: transport closed, resetting state");
           this.cleanupClient();
         };
 
@@ -230,7 +228,7 @@ export class MemoirRuntime {
       }));
       return this.tools;
     } catch (e) {
-      debugLog("MemoirRuntime.listTools failed:", errorMessage(e));
+      log("MemoirRuntime.listTools failed", e);
       return [];
     }
   }
@@ -241,7 +239,7 @@ export class MemoirRuntime {
       try {
         await this.state.client.close();
       } catch (e) {
-        debugLog("closeMemoirClient: close failed:", errorMessage(e));
+        log("closeMemoirClient: close failed", e);
       }
       this.cleanupClient();
     }
@@ -267,7 +265,7 @@ export class MemoirRuntime {
           proc.kill();
         });
       } catch (e) {
-        debugLog("closeMemoirClient: kill failed:", errorMessage(e));
+        log("closeMemoirClient: kill failed", e);
       }
     }
     this.serverUrl = null;
@@ -292,7 +290,7 @@ export async function callMemoirTool(
       arguments: args,
     })) as { content: Array<{ type: string; text?: string }>; isError?: boolean };
     if (result.isError) {
-      debugLog(`callMemoirTool: ${name} returned error`);
+      log(`callMemoirTool: ${name} returned error`);
       return null;
     }
     for (const block of result.content) {
@@ -302,7 +300,7 @@ export async function callMemoirTool(
     }
     return null;
   } catch (e) {
-    debugLog(`callMemoirTool: ${name} failed:`, errorMessage(e));
+    log(`callMemoirTool: ${name} failed`, e);
     return null;
   }
 }

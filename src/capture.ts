@@ -1,4 +1,4 @@
-import { debugLog, infoLog } from "./debug.js";
+import { log } from "./debug.js";
 import type { MemoirToolInfo } from "./mcp-client.js";
 import { loadPrompt } from "./prompts.js";
 import { MEMOIR_CHECKOUT_TOOL, runMemoirSubagent } from "./subagent.js";
@@ -45,10 +45,6 @@ function captureMinChars(): number {
 function autoSaveEnabled(): boolean {
   // ENABLED by default; only an explicit "0" disables it.
   return process.env.MEMOIR_AUTO_SAVE !== "0";
-}
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,16 +186,16 @@ export async function captureTurn(
   tools: MemoirToolInfo[] = [],
 ): Promise<void> {
   if (!autoSaveEnabled()) {
-    debugLog("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
+    log("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
     return;
   }
-  infoLog("captureTurn: started for session", sessionID);
+  log("captureTurn: started for session", sessionID);
 
   try {
     const api = (client as SessionMessagesClient | null | undefined)?.session;
     if (!api?.messages) {
-      debugLog("captureTurn: client.session.messages unavailable");
-      infoLog("captureTurn: skipped — session messages API unavailable");
+      log("captureTurn: client.session.messages unavailable");
+      log("captureTurn: skipped — session messages API unavailable");
       return;
     }
 
@@ -214,23 +210,23 @@ export async function captureTurn(
     const turnId = lastAssistantMessageId(messages);
     if (!turnId) return;
     if (lastCaptured.get(sessionID) === turnId) {
-      infoLog("captureTurn: skipped — already captured this turn");
+      log("captureTurn: skipped — already captured this turn");
       return;
     }
 
     const transcript = lastTurnTranscript(messages);
     if (!shouldCaptureTurn(transcript)) {
-      debugLog("captureTurn: transcript below min-chars, skipping");
-      infoLog("captureTurn: skipped — transcript below min-chars");
+      log("captureTurn: transcript below min-chars, skipping");
+      log("captureTurn: skipped — transcript below min-chars");
       lastCaptured.set(sessionID, turnId);
       return;
     }
 
     if (transcript === null) return;
-    infoLog("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
+    log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
     await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
     lastCaptured.set(sessionID, turnId);
   } catch (e) {
-    debugLog("captureTurn failed:", errorMessage(e));
+    log("captureTurn failed", e);
   }
 }

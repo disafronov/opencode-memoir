@@ -1,5 +1,5 @@
 import type { AgentConfig } from "@opencode-ai/sdk";
-import { debugLog, infoLog } from "./debug.js";
+import { log } from "./debug.js";
 import { loadPrompt } from "./prompts.js";
 
 // opencode restricts an agent's available tools through its `permission`
@@ -89,10 +89,6 @@ export function resolveMemoirModel(opts: ModelResolution): string | undefined {
   return candidates.find((candidate) => candidate?.includes("/"));
 }
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 /** Queue a visible subtask through OpenCode's supported promptAsync input API. */
 export async function runMemoirSubagent(
   client: unknown,
@@ -131,10 +127,9 @@ export async function runMemoirSubagent(
         ],
       },
     });
-    infoLog("memoir subtask accepted (session", parentSessionID, ", task", task.length, "chars)");
+    log("memoir subtask accepted (session", parentSessionID, ", task", task.length, "chars)");
   } catch (e) {
-    debugLog("runMemoirSubagent failed:", errorMessage(e));
-    infoLog("memoir subtask submission FAILED:", errorMessage(e));
+    log("runMemoirSubagent failed", e);
     throw e;
   }
 }

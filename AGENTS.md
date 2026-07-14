@@ -53,7 +53,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 | `src/store.ts` | ~75 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~50 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
 | `src/turn-status.ts` | ~15 | Builds the compact per-turn model status from the `memoir_status` response |
-| `src/debug.ts` | ~60 | File logger: `infoLog` (always) + `debugLog` (`MEMOIR_DEBUG=1`); dest via `MEMOIR_LOG` |
+| `src/debug.ts` | ~70 | Single `log(...)` entrypoint; always logs, while `MEMOIR_DEBUG=1` adds verbose error details and stacks; destination via `MEMOIR_LOG` |
 
 ### Hooks
 
@@ -70,7 +70,7 @@ Runtime hook failures are contained and logged. Capture uses OpenCode's supporte
 
 All optional:
 
-- `MEMOIR_DEBUG=1` — Adds verbose entries to the configured Memoir log. Basic lifecycle entries (server up, capture fired/skipped, recall injected) are always logged.
+- `MEMOIR_DEBUG=1` — Adds verbose diagnostics and passed `Error` stacks. Without it, normal lifecycle entries and concise error messages are still logged.
 - `MEMOIR_LOG` — Log destination: unset → `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log` (daily rotation, never stderr); `stderr` → live stderr (local debugging); any other value → explicit file path. Logs never pollute the opencode terminal by default.
 - `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
 - `MEMOIR_AUTO_SAVE` — Captures the previous completed turn when the next real user message arrives. **Enabled by default**; set `=0` to disable
@@ -80,16 +80,16 @@ All optional:
 
 ## Tests
 
-9 test files, 83 tests total — Node built-in test runner via `tsx --test`.
+9 test files, 86 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
 | `tests/store.test.ts` | 13 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
-| `tests/subagent.test.ts` | 8 | Model fallback isolation and dynamic Memoir-namespace permissions |
+| `tests/subagent.test.ts` | 10 | Model fallback isolation, dynamic Memoir-namespace permissions, and debug-only submission error details |
 | `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
 | `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
 | `tests/index.test.ts` | 23 | Module shape, hook behavior, prompt acceptance ordering, background flag parity, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
-| `tests/debug.test.ts` | 5 | Debug gating plus normal file/stderr lifecycle logging |
+| `tests/debug.test.ts` | 6 | Always-on lifecycle logging, debug error detail, argument formatting, and configured file output |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |
 | `tests/turn-status.test.ts` | 2 | Status formatting, partial responses, and malformed-response degradation |

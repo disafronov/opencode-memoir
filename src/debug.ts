@@ -12,9 +12,9 @@ import { dirname, join } from "node:path";
  *   - "stderr" → stderr, for live local debugging without a separate `tail`
  *   - <path>   → an explicit log file path
  *
- * `infoLog` always writes (lifecycle milestones: server up, capture
- * fired/skipped, recall injected). `debugLog` writes only when MEMOIR_DEBUG=1
- * (verbose internals). For local verification, `tail -f` the log file.
+ * `log(...)` always writes. MEMOIR_DEBUG=1 adds diagnostic detail: Error
+ * objects include their name and stack instead of only their message. For
+ * local verification, `tail -f` the log file.
  */
 
 /**
@@ -30,9 +30,27 @@ function resolveLogFile(): string | null {
   return join(stateHome, "opencode", `memoir-plugin-${date}.log`);
 }
 
-function writeLog(level: string, args: unknown[]): void {
+function formatValue(value: unknown): string {
+  if (value instanceof Error) {
+    if (process.env.MEMOIR_DEBUG === "1") {
+      return value.stack ?? `${value.name}: ${value.message}`;
+    }
+    return value.message;
+  }
+  return String(value);
+}
+
+function formatArgs(args: unknown[]): string {
+  const [message, ...details] = args;
+  if (typeof message === "string" && details[0] instanceof Error) {
+    return `${message.replace(/:\s*$/, "")}: ${details.map(formatValue).join(" ")}`;
+  }
+  return args.map(formatValue).join(" ");
+}
+
+function writeLog(args: unknown[]): void {
   const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
-  const line = `[memoir ${ts}] ${level} ${args.map((a) => String(a)).join(" ")}\n`;
+  const line = `[memoir ${ts}] ${formatArgs(args)}\n`;
   const logFilePath = resolveLogFile();
   if (logFilePath) {
     try {
@@ -46,13 +64,7 @@ function writeLog(level: string, args: unknown[]): void {
   process.stderr.write(line);
 }
 
-/** Lifecycle milestones — always written to the log file. */
-export function infoLog(...args: unknown[]): void {
-  writeLog("info", args);
-}
-
-/** Verbose internals — only written when MEMOIR_DEBUG=1. */
-export function debugLog(...args: unknown[]): void {
-  if (process.env.MEMOIR_DEBUG !== "1") return;
-  writeLog("debug", args);
+/** Single logging entrypoint; MEMOIR_DEBUG=1 controls detail, not emission. */
+export function log(...args: unknown[]): void {
+  writeLog(args);
 }
