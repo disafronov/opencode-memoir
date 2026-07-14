@@ -3,6 +3,7 @@ import { describe, it, mock } from "node:test";
 
 import plugin from "../src/index.ts";
 import { MemoirRuntime } from "../src/mcp-client.ts";
+import { currentGitBranch } from "../src/store.ts";
 
 describe("plugin module shape", () => {
   it("exports default with id and server", () => {
@@ -228,6 +229,7 @@ describe("MemoirOpenCode factory", () => {
     process.env.NODE_ENV = "coverage";
     process.env.MEMOIR_AUTO_SAVE = "1";
     const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
+    const codeBranch = currentGitBranch(process.cwd());
     const mcpClient = {
       listTools: async () => ({
         tools: [{ name: "memoir_remember", description: "Store durable memory" }],
@@ -236,9 +238,9 @@ describe("MemoirOpenCode factory", () => {
         calls.push(input);
         const text =
           input.name === "memoir_summarize"
-            ? "prior facts"
+            ? JSON.stringify({ total: 29, namespaces: { default: { preferences: 29 } } })
             : input.name === "memoir_status"
-              ? "store status"
+              ? JSON.stringify({ branch: codeBranch, memory_count: 31 })
               : "ok";
         return { content: [{ type: "text", text }] };
       },
@@ -286,16 +288,16 @@ describe("MemoirOpenCode factory", () => {
       const output = { system: [] as string[] };
       await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, output);
       await new Promise((resolve) => setImmediate(resolve));
-      assert.ok(output.system.some((line) => line.includes("prior facts")));
-      assert.ok(output.system.some((line) => line.includes("store status")));
+      assert.ok(output.system.some((line) => line.includes('"total":29')));
+      assert.ok(output.system.some((line) => line.includes(`memory available (31 memories)`)));
       assert.ok(output.system.some((line) => line.includes("durable")));
 
       const second = { system: [] as string[] };
       await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, second);
-      assert.ok(second.system.every((line) => !line.includes("prior facts")));
+      assert.ok(second.system.some((line) => line.includes(`memory available (31 memories)`)));
+      assert.ok(second.system.every((line) => !line.includes('"total":29')));
 
       await hooks.dispose();
-      assert.ok(calls.some((call) => call.name === "memoir_checkout"));
       assert.ok(calls.some((call) => call.name === "memoir_summarize"));
       assert.ok(calls.some((call) => call.name === "memoir_status"));
       assert.ok(calls.some((call) => call.name === "memoir_remember"));

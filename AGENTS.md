@@ -50,15 +50,16 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 | `src/store.ts` | ~71 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~40 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
 | `src/memory-saver.ts` | ~25 | Message counter for periodic reminders |
+| `src/turn-status.ts` | ~20 | Builds the compact per-turn model status from the `memoir_status` response |
 | `src/debug.ts` | ~60 | File logger: `infoLog` (always) + `debugLog` (`MEMOIR_DEBUG=1`); dest via `MEMOIR_LOG` |
 
 ### Hooks
 
 - **`config`** — Registers the `memoir` subagent (`memoir_*` allowed except store-global checkout, every non-Memoir tool denied), the `/memoir:onboard` slash command, and the project-scoped `memoir` remote MCP server
 - **`shell.env`** — Injects `MEMOIR_STORE` into shell environment
-- **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, and auto-matches the memoir branch; ignores synthetic and memoir-child messages so capture cannot trigger itself
+- **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, and refreshes the compact model status; ignores synthetic and memoir-child messages so capture cannot trigger itself
 - **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
-- **`experimental.chat.system.transform`** — Startup hint (once/session) + proactive recall (`memoir_summarize` injected as prior context) + periodic reminder (every N messages)
+- **`experimental.chat.system.transform`** — Compact current status (every model call in the turn) + startup hint and proactive recall (once/session) + periodic reminder (every N messages)
 - **`dispose`** — Optionally saves session markers, closes the instance MCP process, and clears pending state
 
 All hooks wrap their body in try/catch, log via `debugLog()`, and never propagate errors. Capture is fire-and-forget. Its child session is intentionally visible as a collapsed subagent in the parent timeline and writes through `memoir_remember`.
@@ -77,18 +78,20 @@ All optional:
 
 ## Tests
 
-8 test files, 77 tests total — Node built-in test runner via `tsx --test`.
+10 test files, 87 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| `tests/store.test.ts` | 11 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
+| `tests/store.test.ts` | 13 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
 | `tests/memory-saver.test.ts` | 7 | Instance-owned counters, reminder boundaries, and cleanup |
 | `tests/subagent.test.ts` | 8 | Model fallback isolation and dynamic Memoir-namespace permissions |
-| `tests/capture.test.ts` | 17 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
-| `tests/index.test.ts` | 18 | Module shape, hook behavior, connected recall/status/reminder flow, self-trigger filtering, and graceful degradation |
+| `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
+| `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
+| `tests/index.test.ts` | 20 | Module shape, hook behavior, connected recall/status/reminder flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 5 | Debug gating plus normal file/stderr lifecycle logging |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |
+| `tests/turn-status.test.ts` | 2 | Status formatting, partial responses, and malformed-response degradation |
 
 Remaining integration gap: a full live OpenCode + real `memoir-mcp` protocol
 session (the process lifecycle itself is covered with a fixture server).
