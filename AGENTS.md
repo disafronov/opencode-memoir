@@ -74,7 +74,7 @@ All optional:
 
 ## Tests
 
-6 test files, 49 tests total — Node built-in test runner via `tsx --test`.
+8 test files, 61 tests total — Node built-in test runner via `tsx --test`.
 
 | File | Tests | What it covers |
 |------|------:|----------------|
@@ -84,6 +84,8 @@ All optional:
 | `tests/capture.test.ts` | 7 | `buildTurnCaptureTask`, `shouldCaptureTurn`, `lastTurnTranscript`, `formatSessionTranscript`, `captureTurn` (fire-and-forget + dedup) |
 | `tests/index.test.ts` | 12 | Module shape (1), hook registration & behavior (10), subagent registration (1) |
 | `tests/debug.test.ts` | 3 | `MEMOIR_DEBUG` gating |
+| `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
+| `tests/mcp-client.test.ts` | 4 | `listMemoirTools` — maps `{name, description}` (coerces non-string desc), caches (single server query), `[]` on throw / empty. Cache reset via `closeMemoirClient` in `beforeEach` |
 
 Missing coverage: `autoMatchMemoirBranch` integration, subagent spawn over the live session API.
 
