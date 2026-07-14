@@ -106,11 +106,6 @@ export class MemoirRuntime {
     if (this.startingServer) return this.startingServer;
 
     const start = (async () => {
-      // In tests, skip spawning a real server — just hand back a placeholder URL.
-      if (process.env.NODE_ENV === "test") {
-        return new URL("http://127.0.0.1:9/mcp");
-      }
-
       // Keep the first selected port for this plugin instance. OpenCode stores
       // the remote URL during config and cannot be pointed at a new random URL
       // after a child-process crash.

@@ -38,6 +38,7 @@ describe("MemoirOpenCode factory", () => {
   it("captures the previous completed turn on the next real chat message", async () => {
     const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
     process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
     try {
       let prompts = 0;
       const client = {
@@ -62,6 +63,7 @@ describe("MemoirOpenCode factory", () => {
       assert.strictEqual(prompts, 1);
       await hooks.dispose();
     } finally {
+      connect.mock.restore();
       if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
       else process.env.MEMOIR_CAPTURE_MIN_CHARS = previousMin;
     }
@@ -70,6 +72,7 @@ describe("MemoirOpenCode factory", () => {
   it("waits for promptAsync acceptance but not subagent execution", async () => {
     const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
     process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
     try {
       let acceptPrompt!: () => void;
       const accepted = new Promise<void>((resolve) => {
@@ -102,6 +105,7 @@ describe("MemoirOpenCode factory", () => {
       assert.strictEqual(finished, true);
       await hooks.dispose();
     } finally {
+      connect.mock.restore();
       if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
       else process.env.MEMOIR_CAPTURE_MIN_CHARS = previousMin;
     }
@@ -247,31 +251,49 @@ describe("MemoirOpenCode factory", () => {
   });
 
   it("config hook registers memoir:onboard command", async () => {
-    const hooks = await plugin.server(undefined, {});
-    const config: { command?: Record<string, unknown> } = {};
-    await hooks.config(config);
-    assert.ok(config.command);
-    assert.ok(config.command["memoir:onboard"]);
-    assert.strictEqual(
-      (config.command["memoir:onboard"] as { description: string }).description,
-      "Populate or refresh Memoir onboarding for this project",
+    const start = mock.method(
+      MemoirRuntime.prototype,
+      "start",
+      async () => new URL("http://127.0.0.1:43210/mcp"),
     );
+    try {
+      const hooks = await plugin.server(undefined, {});
+      const config: { command?: Record<string, unknown> } = {};
+      await hooks.config(config);
+      assert.ok(config.command);
+      assert.ok(config.command["memoir:onboard"]);
+      assert.strictEqual(
+        (config.command["memoir:onboard"] as { description: string }).description,
+        "Populate or refresh Memoir onboarding for this project",
+      );
+    } finally {
+      start.mock.restore();
+    }
   });
 
   it("returns top-level mcp server (memoir)", async () => {
-    const hooks = await plugin.server(undefined, {});
-    const config = {} as Record<string, unknown>;
-    await (hooks.config as (c: Record<string, unknown>) => Promise<void>)(config);
-    const mcp = (hooks as { mcp?: Record<string, unknown> }).mcp;
-    assert.ok(mcp);
-    assert.ok(mcp.memoir);
-    const mcpServer = mcp.memoir as {
-      type: string;
-      url: string;
-      enabled?: boolean;
-    };
-    assert.strictEqual(mcpServer.type, "remote");
-    assert.ok(mcpServer.url.startsWith("http://"));
+    const start = mock.method(
+      MemoirRuntime.prototype,
+      "start",
+      async () => new URL("http://127.0.0.1:43210/mcp"),
+    );
+    try {
+      const hooks = await plugin.server(undefined, {});
+      const config = {} as Record<string, unknown>;
+      await (hooks.config as (c: Record<string, unknown>) => Promise<void>)(config);
+      const mcp = (hooks as { mcp?: Record<string, unknown> }).mcp;
+      assert.ok(mcp);
+      assert.ok(mcp.memoir);
+      const mcpServer = mcp.memoir as {
+        type: string;
+        url: string;
+        enabled?: boolean;
+      };
+      assert.strictEqual(mcpServer.type, "remote");
+      assert.ok(mcpServer.url.startsWith("http://"));
+    } finally {
+      start.mock.restore();
+    }
   });
 
   it("shell.env injects MEMOIR_STORE", async () => {
@@ -287,25 +309,32 @@ describe("MemoirOpenCode factory", () => {
   });
 
   it("config hook registers the memoir subagent without branch checkout", async () => {
-    const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
-    const config: {
-      agent?: Record<string, { mode?: string; permission?: Record<string, string> }>;
-    } = {};
-    await (hooks.config as (c: typeof config) => Promise<void>)(config);
-    assert.ok(config.agent);
-    const agent = config.agent.memoir;
-    assert.ok(agent);
-    assert.strictEqual(agent.mode, "subagent");
-    const perm = agent.permission ?? {};
-    assert.strictEqual(perm["*"], "deny");
-    assert.strictEqual(perm["memoir_*"], "allow");
-    assert.strictEqual(perm.memoir_memoir_checkout, "deny");
+    const start = mock.method(
+      MemoirRuntime.prototype,
+      "start",
+      async () => new URL("http://127.0.0.1:43210/mcp"),
+    );
+    try {
+      const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
+      const config: {
+        agent?: Record<string, { mode?: string; permission?: Record<string, string> }>;
+      } = {};
+      await (hooks.config as (c: typeof config) => Promise<void>)(config);
+      assert.ok(config.agent);
+      const agent = config.agent.memoir;
+      assert.ok(agent);
+      assert.strictEqual(agent.mode, "subagent");
+      const perm = agent.permission ?? {};
+      assert.strictEqual(perm["*"], "deny");
+      assert.strictEqual(perm["memoir_*"], "allow");
+      assert.strictEqual(perm.memoir_memoir_checkout, "deny");
+    } finally {
+      start.mock.restore();
+    }
   });
 
   it("runs the connected branch, recall, status, and session-marker flow", async () => {
-    const previousNodeEnv = process.env.NODE_ENV;
     const previousAutoSave = process.env.MEMOIR_AUTO_SAVE;
-    process.env.NODE_ENV = "coverage";
     process.env.MEMOIR_AUTO_SAVE = "1";
     const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
     const codeBranch = currentGitBranch(process.cwd());
@@ -389,16 +418,12 @@ describe("MemoirOpenCode factory", () => {
     } finally {
       start.mock.restore();
       connect.mock.restore();
-      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previousNodeEnv;
       if (previousAutoSave === undefined) delete process.env.MEMOIR_AUTO_SAVE;
       else process.env.MEMOIR_AUTO_SAVE = previousAutoSave;
     }
   });
 
   it("degrades cleanly when server startup and internal connection fail", async () => {
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "coverage";
     const start = mock.method(MemoirRuntime.prototype, "start", async () => {
       throw "start failed";
     });
@@ -418,8 +443,6 @@ describe("MemoirOpenCode factory", () => {
     } finally {
       start.mock.restore();
       connect.mock.restore();
-      if (previous === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previous;
     }
   });
 });

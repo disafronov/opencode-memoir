@@ -59,7 +59,6 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   // Lazily connected on first use so merely loading the plugin — or running
   // hooks that never touch memoir — spawns no subprocess.
   const connectClient = async () => {
-    if (process.env.NODE_ENV === "test") return null;
     try {
       return await runtime.connect();
     } catch (e) {
