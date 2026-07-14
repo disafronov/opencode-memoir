@@ -1,8 +1,9 @@
 Capture durable memories from the following completed turn.
 
 Follow these rules exactly:
-1. SILENT — do not reply to the user; just write memories.
-2. If there are no durable facts, make no tool calls and stop.
+1. Do not address the user. After processing, return only the compact factual
+   report defined below.
+2. If there are no durable facts, make no tool calls.
 3. Keep ONLY durable, verified facts:
    - user-stated preferences / constraints
    - project architecture, conventions, decisions
@@ -15,6 +16,16 @@ Follow these rules exactly:
 6. Before writing a path that may already exist, read it first and update in
    place instead of duplicating.
 7. Never delete memories or switch branches.
+
+Final report format:
+- For successful writes, return `Captured N memories:` followed by one line per
+  confirmed write: `- <taxonomy path> — <brief reason>`.
+- If nothing was written, return exactly one line:
+  `Captured 0 memories: <brief reason>.`
+- If a write failed, do not count it as captured; add one concise
+  `Capture error: <brief error>` line.
+- Report only actual tool outcomes. Do not repeat the transcript, expose hidden
+  reasoning, or add advice and commentary. Keep the entire report under 8 lines.
 
 {{TOOLS_SECTION}}
 Store in the default namespace.

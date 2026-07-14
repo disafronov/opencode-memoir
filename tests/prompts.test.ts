@@ -6,7 +6,8 @@ import { loadPrompt } from "../src/prompts.ts";
 describe("loadPrompt", () => {
   it("loads a template verbatim with its placeholders intact", () => {
     const text = loadPrompt("capture-task.tmpl");
-    assert.match(text, /SILENT/);
+    assert.match(text, /Captured N memories/);
+    assert.match(text, /actual tool outcomes/);
     assert.match(text, /\{\{TOOLS_SECTION\}\}/);
     assert.match(text, /\{\{TRANSCRIPT\}\}/);
   });

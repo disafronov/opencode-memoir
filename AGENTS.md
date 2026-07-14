@@ -44,7 +44,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 | `src/index.ts` | ~240 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
 | `src/mcp-client.ts` | ~230 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
 | `src/subagent.ts` | ~160 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + runner + model fallback resolution |
-| `src/capture.ts` | ~220 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, dispatch dedup/retry |
+| `src/capture.ts` | ~220 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch dedup/retry |
 | `src/capture-lifecycle.ts` | ~70 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
 | `src/prompts.ts` | ~25 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
 | `src/store.ts` | ~71 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |

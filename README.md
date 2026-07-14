@@ -85,6 +85,8 @@ Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, th
 
 Capturing is done by a dedicated visible, collapsible `memoir` subagent. It can use the dynamic `memoir_*` tool namespace except for the store-global `memoir_memoir_checkout`; branch checkout remains owned by the plugin so a subagent cannot move the shared store. Every non-Memoir tool remains denied. The capture task includes the live MCP tool names and descriptions so a small local model does not have to infer the catalog. Deterministic settings keep it suitable for that model. On each real `chat.message`, the plugin captures the previous completed turn: the incoming user message has not entered the transcript yet. This one-turn delay prevents capture activity from triggering another capture.
 
+The subagent finishes with a compact report of confirmed writes (`Captured N memories`, taxonomy paths, and brief reasons), or a single reason why nothing was captured. OpenCode returns that report to the parent agent through the normal task result; the report is based on actual tool outcomes rather than intended writes.
+
 After each real parent-session message, every model call in that turn receives a compact status from `memoir_status`, such as `[memoir] fix6 · memory available (31 memories)`. Synthetic notifications and memoir child activity do not update it, and the status does not instruct the model to perform recall.
 
 - With `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`, the plugin adds `background: true` in `tool.execute.before`. OpenCode runs the child through its native `BackgroundJob` path and immediately releases the parent session.
