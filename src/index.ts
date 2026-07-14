@@ -9,6 +9,7 @@ import { safeRealpath } from "./path.js";
 import { loadPrompt } from "./prompts.js";
 import { deriveStorePath, MemoirBranchMatcher } from "./store.js";
 import { buildMemoirAgent, MEMOIR_AGENT_NAME, resolveMemoirModel } from "./subagent.js";
+import { buildTurnStatus } from "./turn-status.js";
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -51,6 +52,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const capturePending = new Set<string>();
   const captureLifecycle = new CaptureLifecycle();
   const memorySaver = new MemorySaver();
+  const turnStatus = new Map<string, string>();
 
   // The plugin owns a single shared memoir-mcp HTTP server (started in the
   // config hook). opencode connects to it as a remote MCP server; the plugin's
@@ -169,7 +171,13 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         memorySaver.increment(sid);
 
         const client = await connectClient();
-        if (client) await branchMatcher.match(client, directory, () => captureLifecycle.drain());
+        if (client) {
+          await branchMatcher.match(client, directory, () => captureLifecycle.drain());
+          const status = await callMemoirTool(client, "memoir_status", {});
+          const line = buildTurnStatus(status);
+          if (line) turnStatus.set(sid, line);
+          else turnStatus.delete(sid);
+        }
 
         // chat.message runs before the new user message is persisted, so the
         // transcript still ends at the previous completed assistant turn.
@@ -243,6 +251,9 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       try {
         const sid = input.sessionID ?? "default";
 
+        const status = turnStatus.get(sid);
+        if (status) output.system?.push(status);
+
         if (input.sessionID && parentSessions.has(sid) && !sessionsWithStartupHint.has(sid)) {
           sessionsWithStartupHint.add(sid);
           infoLog("system.transform: startup hint injected for session", sid);
@@ -313,6 +324,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       captureLifecycle.clear();
       branchMatcher.clear();
       memorySaver.clear();
+      turnStatus.clear();
       lastCaptured.clear();
       await runtime.close();
     },
