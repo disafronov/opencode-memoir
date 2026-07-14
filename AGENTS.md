@@ -8,6 +8,7 @@ OpenCode plugin (`opencode-memoir`) that launches the globally installed `memoir
 
 ```bash
 # Development
+make install           # npm dependencies + pre-commit/commit-msg/pre-push hooks
 npm run build          # tsc declarations + esbuild bundle to dist/
 npm run typecheck      # tsc --noEmit (strict mode)
 npm test              # tsx --test tests/*.test.ts (Node built-in test runner)
