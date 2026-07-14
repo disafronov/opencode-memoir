@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 
 import plugin from "../src/index.ts";
+import { MemoirRuntime } from "../src/mcp-client.ts";
 
 describe("plugin module shape", () => {
   it("exports default with id and server", () => {
@@ -33,6 +34,62 @@ describe("MemoirOpenCode factory", () => {
     assert.strictEqual(typeof hooks["chat.message"], "function");
   });
 
+  it("captures the previous completed turn on the next real chat message", async () => {
+    const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
+    process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
+    try {
+      let prompts = 0;
+      const client = {
+        session: {
+          messages: async () => ({
+            data: [
+              { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "hello" }] },
+              { info: { id: "a1", role: "assistant" }, parts: [{ type: "text", text: "hi" }] },
+            ],
+          }),
+          promptAsync: async () => {
+            prompts++;
+          },
+        },
+      };
+      const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
+      await hooks["chat.message"](
+        { sessionID: "parent" },
+        { parts: [{ type: "text", text: "hello" }] },
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.strictEqual(prompts, 1);
+      await hooks.dispose();
+    } finally {
+      if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
+      else process.env.MEMOIR_CAPTURE_MIN_CHARS = previousMin;
+    }
+  });
+
+  it("ignores memoir subtask and synthetic messages for capture", async () => {
+    let prompts = 0;
+    const client = {
+      session: {
+        messages: async () => ({ data: [] }),
+        promptAsync: async () => {
+          prompts++;
+        },
+      },
+    };
+    const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
+    await hooks["chat.message"](
+      { sessionID: "subtask-parent" },
+      { parts: [{ type: "subtask", agent: "memoir" }] },
+    );
+    await hooks["chat.message"](
+      { sessionID: "synthetic-parent" },
+      { parts: [{ type: "text", synthetic: true }] },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(prompts, 0);
+    await hooks.dispose();
+  });
+
   it("marks only memoir tasks as native background jobs when enabled", async () => {
     const previous = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
     process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "true";
@@ -45,6 +102,35 @@ describe("MemoirOpenCode factory", () => {
       const other = { args: { subagent_type: "general" } };
       await hooks["tool.execute.before"]({ tool: "task" }, other);
       assert.strictEqual("background" in other.args, false);
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previous;
+    }
+  });
+
+  it("tracks foreground memoir tasks through tool.execute.after", async () => {
+    const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
+    const args = { subagent_type: "memoir" };
+    await hooks["tool.execute.before"]({ tool: "task", callID: "call-fg" }, { args });
+    await hooks["tool.execute.after"]({ tool: "task", callID: "call-fg", args }, {});
+    await hooks.dispose();
+  });
+
+  it("tracks background memoir tasks until the child session becomes idle", async () => {
+    const previous = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
+    process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "true";
+    try {
+      const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
+      const args = { subagent_type: "memoir" };
+      await hooks["tool.execute.before"]({ tool: "task", callID: "call-bg" }, { args });
+      await hooks["tool.execute.after"](
+        { tool: "task", callID: "call-bg", args },
+        { metadata: { background: true, sessionId: "child-bg" } },
+      );
+      await hooks.event({
+        event: { type: "session.idle", properties: { sessionID: "child-bg" } },
+      });
+      await hooks.dispose();
     } finally {
       if (previous === undefined) delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
       else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previous;
@@ -120,7 +206,7 @@ describe("MemoirOpenCode factory", () => {
     await hooks.dispose();
   });
 
-  it("config hook registers the memoir subagent (subagent mode, memoir_* only)", async () => {
+  it("config hook registers the memoir subagent without branch checkout", async () => {
     const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
     const config: {
       agent?: Record<string, { mode?: string; permission?: Record<string, string> }>;
@@ -133,5 +219,127 @@ describe("MemoirOpenCode factory", () => {
     const perm = agent.permission ?? {};
     assert.strictEqual(perm["*"], "deny");
     assert.strictEqual(perm["memoir_*"], "allow");
+    assert.strictEqual(perm.memoir_memoir_checkout, "deny");
+  });
+
+  it("runs the connected branch, recall, reminder, status, and session-marker flow", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousAutoSave = process.env.MEMOIR_AUTO_SAVE;
+    process.env.NODE_ENV = "coverage";
+    process.env.MEMOIR_AUTO_SAVE = "1";
+    const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
+    const mcpClient = {
+      listTools: async () => ({
+        tools: [{ name: "memoir_remember", description: "Store durable memory" }],
+      }),
+      callTool: async (input: { name: string; arguments?: Record<string, unknown> }) => {
+        calls.push(input);
+        const text =
+          input.name === "memoir_summarize"
+            ? "prior facts"
+            : input.name === "memoir_status"
+              ? "store status"
+              : "ok";
+        return { content: [{ type: "text", text }] };
+      },
+    };
+    const start = mock.method(
+      MemoirRuntime.prototype,
+      "start",
+      async () => new URL("http://127.0.0.1:43210/mcp"),
+    );
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => mcpClient as never);
+    try {
+      const capturePrompts: string[] = [];
+      const sdkClient = {
+        session: {
+          messages: async () => ({
+            data: [
+              { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "remember" }] },
+              { info: { id: "a1", role: "assistant" }, parts: [{ type: "text", text: "saved" }] },
+            ],
+          }),
+          promptAsync: async (input: { body: { parts: Array<{ prompt: string }> } }) => {
+            capturePrompts.push(input.body.parts[0].prompt);
+          },
+        },
+      };
+      const hooks = await plugin.server(
+        { client: sdkClient, directory: process.cwd() } as never,
+        {},
+      );
+      const config = {
+        model: "provider/main",
+        mcp: { existing: { type: "local" } },
+        agent: { existing: { mode: "primary" } },
+        command: { existing: { description: "keep" } },
+      };
+      await hooks.config(config as never);
+
+      for (let i = 0; i < 5; i++) {
+        await hooks["chat.message"](
+          { sessionID: "parent" },
+          { parts: [{ type: "text", text: `message ${i}` }] },
+        );
+      }
+
+      const output = { system: [] as string[] };
+      await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, output);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.ok(output.system.some((line) => line.includes("prior facts")));
+      assert.ok(output.system.some((line) => line.includes("store status")));
+      assert.ok(output.system.some((line) => line.includes("durable")));
+
+      const second = { system: [] as string[] };
+      await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, second);
+      assert.ok(second.system.every((line) => !line.includes("prior facts")));
+
+      await hooks.dispose();
+      assert.ok(calls.some((call) => call.name === "memoir_checkout"));
+      assert.ok(calls.some((call) => call.name === "memoir_summarize"));
+      assert.ok(calls.some((call) => call.name === "memoir_status"));
+      assert.ok(calls.some((call) => call.name === "memoir_remember"));
+      assert.ok(
+        capturePrompts.some((prompt) =>
+          prompt.includes("memoir_memoir_remember — Store durable memory"),
+        ),
+      );
+      assert.strictEqual(start.mock.callCount(), 1);
+      assert.ok(connect.mock.callCount() >= 1);
+    } finally {
+      start.mock.restore();
+      connect.mock.restore();
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousAutoSave === undefined) delete process.env.MEMOIR_AUTO_SAVE;
+      else process.env.MEMOIR_AUTO_SAVE = previousAutoSave;
+    }
+  });
+
+  it("degrades cleanly when server startup and internal connection fail", async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "coverage";
+    const start = mock.method(MemoirRuntime.prototype, "start", async () => {
+      throw "start failed";
+    });
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => {
+      throw "connect failed";
+    });
+    try {
+      const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
+      const config = { mcp: { existing: { type: "local" } } };
+      await hooks.config(config as never);
+      assert.deepStrictEqual(config.mcp, {
+        existing: { type: "local" },
+      });
+      await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
+      await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, { system: [] });
+      await hooks.dispose();
+    } finally {
+      start.mock.restore();
+      connect.mock.restore();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
   });
 });

@@ -1,19 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  deriveStorePath,
-  getCachedBranch,
-  pruneBranchCache,
-  setCachedBranch,
-  setPluginStoreOverride,
-} from "../src/store.ts";
+import { currentGitBranch, deriveStorePath, MemoirBranchMatcher } from "../src/store.ts";
 
 describe("deriveStorePath", () => {
   it("uses pluginStoreOverride when set", () => {
-    setPluginStoreOverride("/custom/store");
-    assert.strictEqual(deriveStorePath("/ignored"), "/custom/store");
-    setPluginStoreOverride(undefined);
+    assert.strictEqual(deriveStorePath("/ignored", "/custom/store"), "/custom/store");
   });
 
   it("uses MEMOIR_STORE env var when no override", () => {
@@ -43,23 +35,6 @@ describe("currentGitBranch", () => {
   it("returns empty string when not in a git repo", async () => {
     const mod = await import("../src/store.ts");
     assert.strictEqual(mod.currentGitBranch("/nonexistent-path"), "");
-  });
-});
-
-describe("branchCache", () => {
-  it("returns empty string for unknown session", () => {
-    assert.strictEqual(getCachedBranch("unknown"), "");
-  });
-
-  it("stores and retrieves branch", () => {
-    setCachedBranch("sess1", "feature-x");
-    assert.strictEqual(getCachedBranch("sess1"), "feature-x");
-  });
-
-  it("clears all entries on prune", () => {
-    setCachedBranch("sess1", "feature-x");
-    pruneBranchCache();
-    assert.strictEqual(getCachedBranch("sess1"), "");
   });
 });
 
@@ -94,9 +69,8 @@ describe("callMemoirTool", () => {
   });
 });
 
-describe("autoMatchMemoirBranch", () => {
+describe("MemoirBranchMatcher", () => {
   it("no-ops when not in a git repo", async () => {
-    const { autoMatchMemoirBranch } = await import("../src/store.ts");
     let called = false;
     const client = {
       callTool: async () => {
@@ -104,9 +78,53 @@ describe("autoMatchMemoirBranch", () => {
         return { content: [] };
       },
     };
-    // cwd for the test runner is a git repo, but currentGitBranch uses
-    // process.cwd(); we can't force non-git here, so just assert it doesn't throw.
-    await autoMatchMemoirBranch(client as never, "sess-git");
-    assert.ok(typeof called === "boolean");
+    await new MemoirBranchMatcher().match(client as never, "/nonexistent-path");
+    assert.strictEqual(called, false);
+  });
+
+  it("reads the actual store branch on every match", async () => {
+    const codeBranch = currentGitBranch(process.cwd());
+    const calls: string[] = [];
+    const client = {
+      callTool: async (input: { name: string }) => {
+        calls.push(input.name);
+        return { content: [{ type: "text", text: JSON.stringify({ branch: codeBranch }) }] };
+      },
+    };
+    const matcher = new MemoirBranchMatcher();
+    await matcher.match(client as never, process.cwd());
+    await matcher.match(client as never, process.cwd());
+    assert.deepEqual(calls, ["memoir_status", "memoir_status"]);
+  });
+
+  it("drains active captures before checkout and rechecks the branch", async () => {
+    const codeBranch = currentGitBranch(process.cwd());
+    const order: string[] = [];
+    let current = "other";
+    const client = {
+      callTool: async (input: { name: string }) => {
+        order.push(input.name);
+        if (input.name === "memoir_checkout") current = codeBranch;
+        return { content: [{ type: "text", text: JSON.stringify({ branch: current }) }] };
+      },
+    };
+    const matcher = new MemoirBranchMatcher();
+    await matcher.match(client as never, process.cwd(), async () => {
+      order.push("drain");
+      return true;
+    });
+    assert.deepEqual(order, ["memoir_status", "drain", "memoir_status", "memoir_checkout"]);
+  });
+
+  it("defers checkout when active captures do not drain", async () => {
+    const calls: string[] = [];
+    const client = {
+      callTool: async (input: { name: string }) => {
+        calls.push(input.name);
+        return { content: [{ type: "text", text: JSON.stringify({ branch: "other" }) }] };
+      },
+    };
+    await new MemoirBranchMatcher().match(client as never, process.cwd(), async () => false);
+    assert.deepEqual(calls, ["memoir_status"]);
   });
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveMemoirModel } from "../src/subagent.js";
+import { buildMemoirAgent, MEMOIR_CHECKOUT_TOOL, resolveMemoirModel } from "../src/subagent.js";
 
 function withEnv(key: string, value: string | undefined, fn: () => void): void {
   const prev = process.env[key];
@@ -57,11 +57,33 @@ describe("resolveMemoirModel", () => {
     });
   });
 
+  it("ignores an invalid env override and uses small_model", () => {
+    withEnv("MEMOIR_AGENT_MODEL", "bare-model", () => {
+      assert.equal(resolveMemoirModel({ smallModel: "local/small" }), "local/small");
+    });
+  });
+
   it("restores the env var after the block (isolation)", () => {
     const outer = process.env.MEMOIR_AGENT_MODEL;
     withEnv("MEMOIR_AGENT_MODEL", "x/y", () => {
       assert.equal(resolveMemoirModel({}), "x/y");
     });
     assert.equal(process.env.MEMOIR_AGENT_MODEL, outer);
+  });
+});
+
+describe("buildMemoirAgent", () => {
+  it("allows memoir tools but denies the store-global checkout tool last", () => {
+    const agent = buildMemoirAgent("local/small");
+    assert.equal(agent.permission["*"], "deny");
+    assert.equal(agent.permission["memoir_*"], "allow");
+    assert.equal(agent.permission[MEMOIR_CHECKOUT_TOOL], "deny");
+    assert.deepEqual(Object.keys(agent.permission), [
+      "*",
+      "doom_loop",
+      "memoir_*",
+      MEMOIR_CHECKOUT_TOOL,
+    ]);
+    assert.equal(agent.temperature, 0);
   });
 });

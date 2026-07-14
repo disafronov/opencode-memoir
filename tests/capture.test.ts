@@ -45,6 +45,23 @@ describe("formatSessionTranscript", () => {
     assert.match(out, /hi there/);
     assert.doesNotMatch(out, /tool/);
   });
+
+  it("renders system and unknown roles and joins text parts", () => {
+    const out = formatSessionTranscript([
+      { info: { role: "system" }, parts: [{ type: "text", text: "rules" }] },
+      {
+        info: { role: "critic" },
+        parts: [
+          { type: "text", text: "first" },
+          { type: "text", text: "second" },
+        ],
+      },
+      { parts: [{ type: "text", text: "fallback" }] },
+    ]);
+    assert.match(out, /SYSTEM\nrules/);
+    assert.match(out, /CRITIC\nfirst\nsecond/);
+    assert.match(out, /UNKNOWN\nfallback/);
+  });
 });
 
 describe("lastTurnTranscript", () => {
@@ -66,6 +83,10 @@ describe("lastTurnTranscript", () => {
     const msgs = [userMsg("u1", "just a question")];
     assert.equal(lastTurnTranscript(msgs), null);
   });
+
+  it("returns null when an assistant answer has no preceding user", () => {
+    assert.equal(lastTurnTranscript([assistantMsg("a1", "orphan answer")]), null);
+  });
 });
 
 describe("shouldCaptureTurn", () => {
@@ -78,16 +99,25 @@ describe("shouldCaptureTurn", () => {
     assert.equal(shouldCaptureTurn("x", 0), true);
     assert.equal(shouldCaptureTurn(null, 0), false);
   });
+
+  it("uses the default threshold for an invalid environment value", () => {
+    const previous = process.env.MEMOIR_CAPTURE_MIN_CHARS;
+    process.env.MEMOIR_CAPTURE_MIN_CHARS = "not-a-number";
+    try {
+      assert.equal(shouldCaptureTurn("short"), false);
+      assert.equal(shouldCaptureTurn("long enough transcript"), true);
+    } finally {
+      if (previous === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
+      else process.env.MEMOIR_CAPTURE_MIN_CHARS = previous;
+    }
+  });
 });
 
 describe("buildTurnCaptureTask", () => {
   it("embeds the transcript and imposes silence + taxonomy rules", () => {
-    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello", [
-      { name: "memoir_memoir_remember", description: "store a durable fact at a taxonomy path" },
-    ]);
+    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
     assert.match(task, /SILENT/);
-    assert.match(task, /memoir_memoir_remember/);
-    assert.match(task, /store a durable fact at a taxonomy path/);
+    assert.match(task, /no durable facts, make no tool calls/);
     assert.match(task, /USER/);
     assert.match(task, /hello/);
   });
@@ -97,9 +127,100 @@ describe("buildTurnCaptureTask", () => {
     assert.doesNotMatch(task, /Available memory tools/);
     assert.match(task, /SILENT/);
   });
+
+  it("injects the live memoir tool names and descriptions", () => {
+    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello", [
+      { name: "memoir_remember", description: "Store one durable fact" },
+      { name: "memoir_get", description: "Read an existing path" },
+    ]);
+    assert.match(task, /memoir_remember — Store one durable fact/);
+    assert.match(task, /memoir_get — Read an existing path/);
+    assert.doesNotMatch(task, /\{\{TOOLS_SECTION\}\}/);
+  });
+
+  it("retries a turn after prompt dispatch fails", async () => {
+    const prevMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
+    process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
+    try {
+      let attempts = 0;
+      const fakeClient = {
+        session: {
+          messages: async () => ({
+            data: [userMsg("u1", "remember this"), assistantMsg("a1", "durable answer")],
+          }),
+          promptAsync: async () => {
+            attempts++;
+            if (attempts === 1) throw new Error("dispatch failed");
+          },
+        },
+      };
+      const seen = new Map<string, string>();
+      await captureTurn(fakeClient, "sid", "/tmp", seen);
+      assert.strictEqual(seen.has("sid"), false);
+      await captureTurn(fakeClient, "sid", "/tmp", seen);
+      assert.strictEqual(attempts, 2);
+      assert.strictEqual(seen.get("sid"), "a1");
+    } finally {
+      if (prevMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
+      else process.env.MEMOIR_CAPTURE_MIN_CHARS = prevMin;
+    }
+  });
 });
 
 describe("captureTurn", () => {
+  it("quietly skips unavailable, invalid, and incomplete transcript APIs", async () => {
+    const seen = new Map<string, string>();
+    await captureTurn(null, "missing", "/tmp", seen);
+    await captureTurn(
+      { session: { messages: async () => ({ data: {} }) } },
+      "invalid",
+      "/tmp",
+      seen,
+    );
+    await captureTurn({ session: { messages: async () => ({ data: [] }) } }, "empty", "/tmp", seen);
+    await captureTurn(
+      { session: { messages: async () => ({ data: [userMsg("u1", "question")] }) } },
+      "incomplete",
+      "/tmp",
+      seen,
+    );
+    assert.strictEqual(seen.size, 0);
+  });
+
+  it("marks a below-threshold turn as seen without dispatching it", async () => {
+    const previous = process.env.MEMOIR_CAPTURE_MIN_CHARS;
+    process.env.MEMOIR_CAPTURE_MIN_CHARS = "1000";
+    let prompts = 0;
+    try {
+      const client = {
+        session: {
+          messages: async () => ({ data: [userMsg("u1", "q"), assistantMsg("a1", "a")] }),
+          promptAsync: async () => {
+            prompts++;
+          },
+        },
+      };
+      const seen = new Map<string, string>();
+      await captureTurn(client, "sid", "/tmp", seen);
+      assert.strictEqual(prompts, 0);
+      assert.strictEqual(seen.get("sid"), "a1");
+    } finally {
+      if (previous === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
+      else process.env.MEMOIR_CAPTURE_MIN_CHARS = previous;
+    }
+  });
+
+  it("swallows transcript retrieval errors", async () => {
+    const client = {
+      session: {
+        messages: async () => {
+          throw "messages failed";
+        },
+      },
+    };
+    await captureTurn(client, "sid", "/tmp", new Map());
+  });
+
   it("is a no-op and never throws when MEMOIR_AUTO_SAVE=0", async () => {
     const prev = process.env.MEMOIR_AUTO_SAVE;
     process.env.MEMOIR_AUTO_SAVE = "0";

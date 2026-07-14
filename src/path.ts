@@ -38,6 +38,7 @@ export function deriveStorePath(cwd: string = process.cwd(), override?: string):
     const gitRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: realCwd,
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
       timeout: 3_000,
     }).trim();
     projectDir = safeRealpath(gitRoot);
