@@ -12,6 +12,16 @@ interface MemoirClientState {
 let state: MemoirClientState | null = null;
 let connecting: Promise<Client> | null = null;
 
+// Discovered memoir tool catalog (name + description), cached so we hit the
+// server only once per process. Invalidated together with the client.
+let cachedTools: MemoirToolInfo[] | null = null;
+
+/** A single discovered memoir MCP tool: its name and human description. */
+export interface MemoirToolInfo {
+  name: string;
+  description: string;
+}
+
 // Single shared memoir-mcp HTTP server, spawned and owned by the plugin.
 // Both opencode (registered as a remote MCP server) and the plugin's own
 // internal client connect to this one process — no second stdio spawn.
@@ -73,6 +83,7 @@ function waitForPort(port: number, timeoutMs = 10_000): Promise<void> {
 function cleanup(): void {
   state = null;
   connecting = null;
+  cachedTools = null;
 }
 
 /**
@@ -203,6 +214,28 @@ export async function closeMemoirClient(): Promise<void> {
   serverUrl = null;
   startingServer = null;
   connecting = null;
+  cachedTools = null;
+}
+
+/**
+ * Return the memoir server's tool catalog (name + description). The subagent's
+ * per-call task prompt is built from this so it always reflects the live
+ * server — no hardcoded tool list in source. Cached per process; invalidated
+ * when the client/connection is torn down.
+ */
+export async function listMemoirTools(client: Client): Promise<MemoirToolInfo[]> {
+  if (cachedTools) return cachedTools;
+  try {
+    const res = await client.listTools();
+    cachedTools = (res.tools ?? []).map((t) => ({
+      name: t.name,
+      description: typeof t.description === "string" ? t.description : "",
+    }));
+    return cachedTools;
+  } catch (e) {
+    debugLog("listMemoirTools failed:", errorMessage(e));
+    return [];
+  }
 }
 
 /**

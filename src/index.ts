@@ -6,10 +6,13 @@ import {
   callMemoirTool,
   closeMemoirClient,
   getMemoirClient,
+  listMemoirTools,
+  type MemoirToolInfo,
   startMemoirHttpServer,
 } from "./mcp-client.js";
 import { incrementMsgCount, pruneAll, sessionMsgCount, shouldRemind } from "./memory-saver.js";
 import { safeRealpath } from "./path.js";
+import { loadPrompt } from "./prompts.js";
 import {
   autoMatchMemoirBranch,
   deriveStorePath,
@@ -77,6 +80,15 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
     }
   };
 
+  // Fetch the live memoir tool catalog once (cached in mcp-client). Skipped in
+  // tests so the config/chat hooks never reach for a real server. Returns []
+  // on any failure so callers degrade to a tool-free prompt.
+  const discoverMemoirTools = async (): Promise<MemoirToolInfo[]> => {
+    if (process.env.NODE_ENV === "test") return [];
+    const client = await connectClient();
+    return client ? listMemoirTools(client) : [];
+  };
+
   const hooks: Record<string, unknown> = {
     name: "memoir",
 
@@ -120,20 +132,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       config.command = config.command ?? {};
       config.command["memoir:onboard"] = {
         description: "Populate or refresh Memoir onboarding for this project",
-        template: `Populate or refresh Memoir onboarding for the current project.
-
-Workflow:
-- First obtain a project file tree to understand structure.
-- Start studying from project documentation.
-- Continue only based on what the tree and documentation show.
-
-Memory rules:
-- Record only verified facts from files/docs/code or explicit user statements.
-- Do not write inferred user thoughts, intentions, preferences, or opinions.
-- Do not use preferences.* paths unless the user explicitly stated a preference.
-- If a fact is your interpretation, do not save it; report it as uncertain instead.
-
-Then call memoir_memoir_remember with replace=true for durable onboarding facts. Use namespace codebase:onboard in git repositories and project:onboard outside git.`,
+        template: loadPrompt("onboard.tmpl"),
       };
     },
 
@@ -166,7 +165,7 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
         // Fire-and-forget: capture the just-completed turn into memoir via the
         // subagent. Never await — a slow/down model must not stall the user.
         infoLog("chat.message: firing capture for session", sid);
-        void captureTurn(sdkClient, sid, directory, lastCaptured);
+        void captureTurn(sdkClient, sid, directory, lastCaptured, await discoverMemoirTools());
       } catch (e) {
         debugLog("chat.message: failed:", errorMessage(e));
       }
@@ -207,16 +206,18 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
           sessionsWithStartupHint.add(sid);
           infoLog("system.transform: startup hint injected for session", sid);
 
-          // Hint: the main agent owns proactive recall/store via memoir tools.
-          output.system?.unshift(
-            '[memoir] You have Memoir MCP tools (memoir_memoir_recall, memoir_memoir_remember, memoir_memoir_get, memoir_memoir_summarize, memoir_memoir_status, memoir_memoir_branches, memoir_memoir_checkout).\nSAVE (memoir_memoir_remember) after: task completion, user stating preferences/constraints, discovering project facts. RECALL (memoir_memoir_recall → memoir_memoir_get) at session start for prior context, when user asks about prior work.\nNamespaces: "default" (user context), "codebase:onboard" (project facts in git repos). Taxonomy paths: preferences.*, project.*, codebase.*, decisions.*, learning.*.',
-          );
+          // Hint: the main agent owns proactive recall/store via memory tools.
+          // Tool names are intentionally omitted — the agent already sees its
+          // allowed memoir_* tools, so naming them here would just be hardcode.
+          // The text lives in prompts/startup-hint.tmpl for easy editing.
+          output.system?.unshift(loadPrompt("startup-hint.tmpl"));
 
-          // Proactive recall: surface what memoir already holds for this store
-          // so the agent starts with prior context. Cheap, LLM-free summarize.
-          if (process.env.MEMOIR_SUMMARIZE !== "0") {
-            const client = await connectClient();
-            if (client) {
+          // Proactive context: surface what memoir already holds + the active
+          // store status so the agent starts oriented. Both are cheap and
+          // LLM-free. The client is fetched once and reused for both calls.
+          const client = await connectClient();
+          if (client) {
+            if (process.env.MEMOIR_SUMMARIZE !== "0") {
               const summary = await callMemoirTool(client, "memoir_summarize", {
                 depth: 1,
               });
@@ -226,17 +227,22 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
                 );
                 infoLog("system.transform: proactive recall injected for session", sid);
               }
+            } else {
+              infoLog("system.transform: recall skipped (MEMOIR_SUMMARIZE=0)");
             }
-          } else {
-            infoLog("system.transform: recall skipped (MEMOIR_SUMMARIZE=0)");
+
+            const status = await callMemoirTool(client, "memoir_status", {});
+            if (status) {
+              output.system?.unshift(`[memoir] Memory store status:\n${status}`);
+              infoLog("system.transform: store status injected for session", sid);
+            }
           }
         }
 
         const count = sessionMsgCount.get(sid) ?? 0;
         if (shouldRemind(count)) {
-          output.system?.push(
-            "\n[memoir] Reminder: Use memoir_memoir_remember to save context, memoir_memoir_recall to retrieve prior context.",
-          );
+          // Text in prompts/reminder.tmpl; tool-free by design (see hint above).
+          output.system?.push(loadPrompt("reminder.tmpl"));
         }
       } catch (e) {
         debugLog("system.transform: failed:", errorMessage(e));
@@ -247,9 +253,10 @@ Then call memoir_memoir_remember with replace=true for durable onboarding facts.
       try {
         // Final capture of the session's last turn before teardown.
         if (sdkClient) {
+          const tools = await discoverMemoirTools();
           for (const sid of lastCaptured.keys()) {
             infoLog("dispose: final capture for session", sid);
-            void captureTurn(sdkClient, sid, directory, lastCaptured);
+            void captureTurn(sdkClient, sid, directory, lastCaptured, tools);
           }
         }
 

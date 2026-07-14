@@ -1,4 +1,6 @@
 import { debugLog, infoLog } from "./debug.js";
+import type { MemoirToolInfo } from "./mcp-client.js";
+import { loadPrompt } from "./prompts.js";
 import { runMemoirSubagent } from "./subagent.js";
 
 // ---------------------------------------------------------------------------
@@ -134,33 +136,27 @@ export function shouldCaptureTurn(
 // Task builder (mirrors plugins/claude-code/hooks/stop_capture.tmpl)
 // ---------------------------------------------------------------------------
 
+// Capture task template, loaded from prompts/capture-task.tmpl. The live tool
+// catalog (names + descriptions) is injected as {{TOOLS_SECTION}} from the
+// memoir server so the task always reflects the actual tools — no hardcoded
+// list. When `tools` is empty the catalog section is omitted.
+const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
+
 /**
  * Build the capture task handed to the memoir subagent. Mirrors memoir's
  * stop_capture.tmpl: stay SILENT, apply the 4 durability checks, and write
  * each fact with an explicit 3-level taxonomy path (no classifier guessing).
  */
-export function buildTurnCaptureTask(transcript: string): string {
-  return `Capture durable memories from the following completed turn.
-
-Follow these rules exactly:
-1. SILENT — do not reply to the user; just write memories.
-2. Keep ONLY durable, verified facts:
-   - user-stated preferences / constraints
-   - project architecture, conventions, decisions
-   - recurring patterns or corrections
-3. DROP: ephemeral todo state, raw command output, speculative opinions,
-   anything you inferred rather than observed.
-4. For every fact, call memoir_memoir_remember with an EXPLICIT 3-level
-   taxonomy path (e.g. preferences.coding.languages, project.architecture.layout,
-   decisions.api.auth). Do not let any classifier invent the path.
-5. Before writing a path that may already exist, memoir_memoir_get it and
-   update in place instead of duplicating.
-
-Store in the default namespace.
-
---- TURN TRANSCRIPT ---
-${transcript}
---- END TURN TRANSCRIPT ---`;
+export function buildTurnCaptureTask(transcript: string, tools: MemoirToolInfo[] = []): string {
+  const toolSection = tools.length
+    ? `Available memory tools (name — what it does):\n${tools
+        .map((t) => `- ${t.name} — ${t.description}`)
+        .join("\n")}\n`
+    : "";
+  return CAPTURE_TASK_TEMPLATE.replace("{{TOOLS_SECTION}}", toolSection).replace(
+    "{{TRANSCRIPT}}",
+    transcript,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -188,12 +184,14 @@ function lastAssistantMessageId(messages: ChatMessage[]): string | null {
  * @param directory working directory for the child session (unused — the
  *   running opencode instance is already bound to it; kept for call stability)
  * @param lastCaptured per-session map of already-captured assistant ids
+ * @param tools    live memoir tool catalog, injected into the subagent task
  */
 export async function captureTurn(
   client: unknown,
   sessionID: string,
   _directory: string,
   lastCaptured: Map<string, string>,
+  tools: MemoirToolInfo[] = [],
 ): Promise<void> {
   if (!autoSaveEnabled()) {
     debugLog("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
@@ -235,7 +233,7 @@ export async function captureTurn(
     lastCaptured.set(sessionID, turnId);
     if (transcript === null) return;
     infoLog("captureTurn: dispatching memoir subagent (transcript", transcript.length, "chars)");
-    runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript));
+    runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
   } catch (e) {
     debugLog("captureTurn failed:", errorMessage(e));
   }
