@@ -114,9 +114,10 @@ describe("shouldCaptureTurn", () => {
 });
 
 describe("buildTurnCaptureTask", () => {
-  it("embeds the transcript and imposes silence + taxonomy rules", () => {
+  it("embeds the transcript and imposes reporting + taxonomy rules", () => {
     const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
-    assert.match(task, /SILENT/);
+    assert.match(task, /Captured N memories/);
+    assert.match(task, /actual tool outcomes/);
     assert.match(task, /no durable facts, make no tool calls/);
     assert.match(task, /USER/);
     assert.match(task, /hello/);
@@ -125,7 +126,7 @@ describe("buildTurnCaptureTask", () => {
   it("omits the tool section when no tools are supplied", () => {
     const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
     assert.doesNotMatch(task, /Available memory tools/);
-    assert.match(task, /SILENT/);
+    assert.match(task, /Captured 0 memories/);
   });
 
   it("injects the live memoir tool names and descriptions", () => {

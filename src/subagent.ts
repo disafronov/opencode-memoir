@@ -102,8 +102,8 @@ function errorMessage(e: unknown): string {
  * message (mode = the agent name) plus a TaskTool tool-part, then
  * TaskTool.execute calls sessions.create({ parentID }) and runs the agent in
  * that child session. The UI renders the child as a COLLAPSED subagent inside
- * the parent timeline — exactly like the built-in explorer — never dumping the
- * agent's raw output inline into the main chat stream.
+ * the parent timeline, exactly like the built-in explorer. OpenCode returns
+ * its compact report as the task result (or a synthetic background completion).
  *
  * The plugin client is the v1 SDK client; its promptAsync takes the
  * `{ path: { id }, body: { parts } }` shape. The running instance is already

@@ -139,9 +139,9 @@ export function shouldCaptureTurn(
 const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
 
 /**
- * Build the capture task handed to the memoir subagent. Mirrors memoir's
- * stop_capture.tmpl: stay SILENT, apply the 4 durability checks, and write
- * each fact with an explicit 3-level taxonomy path (no classifier guessing).
+ * Build the capture task handed to the memoir subagent. It applies the
+ * durability checks, writes each fact with an explicit 3-level taxonomy path,
+ * and returns a compact report based only on confirmed tool outcomes.
  */
 export function buildTurnCaptureTask(transcript: string, tools: MemoirToolInfo[] = []): string {
   const captureTools = tools.filter((tool) => tool.name !== MEMOIR_CHECKOUT_TOOL);
