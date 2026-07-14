@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { callMemoirTool } from "./mcp-client.js";
 import { deriveStorePath as deriveStorePathBase, safeRealpath } from "./path.js";
+import { parseMemoirStatus } from "./status.js";
 
 /** Resolve the memoir store path, honoring the plugin `store` option override. */
 export function deriveStorePath(cwd?: string, override?: string): string {
@@ -38,13 +39,7 @@ export class MemoirBranchMatcher {
 
   private async currentBranch(client: Client): Promise<string> {
     const raw = await callMemoirTool(client, "memoir_status");
-    if (!raw) return "";
-    try {
-      const status = JSON.parse(raw) as { branch?: unknown };
-      return typeof status.branch === "string" ? status.branch : "";
-    } catch {
-      return "";
-    }
+    return parseMemoirStatus(raw).branch ?? "";
   }
 
   private async matchNow(
