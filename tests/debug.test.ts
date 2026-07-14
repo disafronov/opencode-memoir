@@ -2,72 +2,69 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, it, mock } from "node:test";
+import { afterEach, describe, it } from "node:test";
 
-import { debugLog, infoLog } from "../src/debug.ts";
+import { log } from "../src/debug.ts";
 
-describe("debugLog", () => {
-  afterEach(() => {
-    delete process.env.MEMOIR_DEBUG;
-    delete process.env.MEMOIR_LOG;
-    mock.reset();
+const files = new Set<string>();
+
+function useTempLog(): string {
+  const file = join(tmpdir(), `memoir-log-test-${process.pid}-${Date.now()}-${files.size}.log`);
+  files.add(file);
+  process.env.MEMOIR_LOG = file;
+  return file;
+}
+
+afterEach(() => {
+  delete process.env.MEMOIR_DEBUG;
+  delete process.env.MEMOIR_LOG;
+  for (const file of files) rmSync(file, { force: true });
+  files.clear();
+});
+
+describe("log", () => {
+  it("writes lifecycle messages when MEMOIR_DEBUG is not set", () => {
+    const file = useTempLog();
+    log("lifecycle event");
+    assert.match(readFileSync(file, "utf8"), /^\[memoir .+\] lifecycle event\n$/);
   });
 
-  it("writes nothing when MEMOIR_DEBUG is not set", () => {
-    process.env.MEMOIR_LOG = "stderr";
-    mock.method(process.stderr, "write", () => true);
-    debugLog("test message");
-    assert.strictEqual((process.stderr.write as ReturnType<typeof mock.fn>).mock.calls.length, 0);
-  });
-
-  it("writes to stderr when MEMOIR_DEBUG=1 and MEMOIR_LOG=stderr", () => {
+  it("writes lifecycle messages when MEMOIR_DEBUG=1", () => {
+    const file = useTempLog();
     process.env.MEMOIR_DEBUG = "1";
-    process.env.MEMOIR_LOG = "stderr";
-    mock.method(process.stderr, "write", () => true);
-    debugLog("test message");
-    const write = process.stderr.write as ReturnType<typeof mock.fn>;
-    assert.strictEqual(write.mock.calls.length, 1);
-    const written = write.mock.calls[0].arguments[0] as string;
-    assert.ok(written.startsWith("[memoir "));
-    assert.ok(written.includes("test message"));
+    log("lifecycle event");
+    const contents = readFileSync(file, "utf8");
+    assert.match(contents, /^\[memoir .+\] lifecycle event\n$/);
   });
 
   it("handles multiple arguments", () => {
+    const file = useTempLog();
     process.env.MEMOIR_DEBUG = "1";
-    process.env.MEMOIR_LOG = "stderr";
-    mock.method(process.stderr, "write", () => true);
-    debugLog("part1", "part2", 42);
-    const write = process.stderr.write as ReturnType<typeof mock.fn>;
-    const written = write.mock.calls[0].arguments[0] as string;
-    assert.ok(written.includes("part1 part2 42"));
-  });
-});
-
-describe("infoLog", () => {
-  afterEach(() => {
-    delete process.env.MEMOIR_LOG;
-    mock.reset();
+    log("part1", "part2", 42);
+    assert.match(readFileSync(file, "utf8"), /part1 part2 42/);
   });
 
-  it("always writes regardless of MEMOIR_DEBUG", () => {
-    process.env.MEMOIR_LOG = "stderr";
-    mock.method(process.stderr, "write", () => true);
-    infoLog("lifecycle event");
-    const write = process.stderr.write as ReturnType<typeof mock.fn>;
-    assert.strictEqual(write.mock.calls.length, 1);
-    assert.ok((write.mock.calls[0].arguments[0] as string).includes("lifecycle event"));
+  it("renders concise Errors without MEMOIR_DEBUG and supplies the colon", () => {
+    const file = useTempLog();
+    log("operation failed", new Error("failure detail"));
+    const contents = readFileSync(file, "utf8");
+    assert.match(contents, /operation failed: failure detail/);
+    assert.doesNotMatch(contents, /debug\.test\.ts/);
   });
 
-  it("writes to the file named by MEMOIR_LOG", () => {
-    const file = join(tmpdir(), `memoir-log-test-${process.pid}-${Date.now()}.log`);
-    process.env.MEMOIR_LOG = file;
-    try {
-      infoLog("to file");
-      const contents = readFileSync(file, "utf8");
-      assert.ok(contents.includes("to file"));
-      assert.ok(contents.includes("info"));
-    } finally {
-      rmSync(file, { force: true });
-    }
+  it("renders Error stacks with MEMOIR_DEBUG=1", () => {
+    const file = useTempLog();
+    process.env.MEMOIR_DEBUG = "1";
+    log("operation failed", new Error("failure detail"));
+    const contents = readFileSync(file, "utf8");
+    assert.match(contents, /operation failed: Error: failure detail/);
+    assert.match(contents, /debug\.test\.ts/);
+  });
+
+  it("uses the configured file path", () => {
+    const file = useTempLog();
+    process.env.MEMOIR_DEBUG = "1";
+    log("configured destination");
+    assert.match(readFileSync(file, "utf8"), /configured destination/);
   });
 });

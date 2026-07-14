@@ -1,4 +1,4 @@
-import { debugLog } from "./debug.js";
+import { log } from "./debug.js";
 
 type ActiveCapture = {
   done: Promise<void>;
@@ -51,7 +51,7 @@ export class CaptureLifecycle {
     const drained = Promise.all(pending).then(() => true as const);
     const result = await Promise.race([drained, timedOut]);
     if (timer) clearTimeout(timer);
-    if (!result) debugLog("capture lifecycle: drain timed out; branch switch deferred");
+    if (!result) log("capture lifecycle: drain timed out; branch switch deferred");
     return result;
   }
 

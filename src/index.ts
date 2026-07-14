@@ -2,17 +2,13 @@ import type { Config, Plugin, PluginInput, PluginModule } from "@opencode-ai/plu
 import type { AgentConfig } from "@opencode-ai/sdk";
 import { captureTurn } from "./capture.js";
 import { CaptureLifecycle } from "./capture-lifecycle.js";
-import { debugLog, infoLog } from "./debug.js";
+import { log } from "./debug.js";
 import { callMemoirTool, MemoirRuntime } from "./mcp-client.js";
 import { safeRealpath } from "./path.js";
 import { loadPrompt } from "./prompts.js";
 import { deriveStorePath, MemoirBranchMatcher } from "./store.js";
 import { buildMemoirAgent, MEMOIR_AGENT_NAME, resolveMemoirModel } from "./subagent.js";
 import { buildTurnStatus } from "./turn-status.js";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 function envFlag(name: string): boolean | undefined {
   const value = process.env[name]?.trim().toLowerCase();
@@ -67,7 +63,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
     try {
       return await runtime.connect();
     } catch (e) {
-      debugLog("plugin: failed to connect memoir client:", errorMessage(e));
+      log("plugin: failed to connect memoir client", e);
       return null;
     }
   };
@@ -85,7 +81,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       if (client) await branchMatcher.match(client, directory, () => captureLifecycle.drain());
       await captureTurn(sdkClient, sid, directory, lastCaptured, await discoverTools());
     } catch (e) {
-      debugLog("dispatchCapture failed:", errorMessage(e));
+      log("dispatchCapture failed", e);
     } finally {
       capturePending.delete(sid);
     }
@@ -95,14 +91,14 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
     name: "memoir",
 
     config: async (config: Config): Promise<void> => {
-      debugLog("config hook: mcpCommand =", JSON.stringify(mcpCommand));
+      log("config hook: mcpCommand =", JSON.stringify(mcpCommand));
 
       try {
         const url = await runtime.start();
         mcpServer = { type: "remote", url: url.toString(), enabled: true };
-        infoLog("memoir MCP server registered at", url.toString(), "| store:", storePath);
+        log("memoir MCP server registered at", url.toString(), "| store:", storePath);
       } catch (e) {
-        debugLog("config hook: failed to start memoir HTTP server:", errorMessage(e));
+        log("config hook: failed to start memoir HTTP server", e);
         mcpServer = undefined;
       }
 
@@ -129,8 +125,8 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         ...(agentField.agent ?? {}),
         [MEMOIR_AGENT_NAME]: buildMemoirAgent(agentModel) as unknown as AgentConfig,
       };
-      infoLog("memoir subagent registered | model:", agentModel ?? "(opencode default)");
-      infoLog(
+      log("memoir subagent registered | model:", agentModel ?? "(opencode default)");
+      log(
         "memoir capture execution mode:",
         backgroundSubagentsEnabled() ? "native background" : "foreground",
         "| OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS:",
@@ -155,7 +151,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
           output.env.MEMOIR_STORE = storePath;
         }
       } catch (e) {
-        debugLog("shell.env: failed:", errorMessage(e));
+        log("shell.env: failed", e);
       }
     },
 
@@ -193,10 +189,10 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         // promptAsync returns 204 after forking the prompt in OpenCode. Await
         // that acceptance so the visible capture task is queued before this
         // hook releases the parent prompt; subagent execution is not awaited.
-        infoLog("chat.message: submitting capture for previous completed turn", sid);
+        log("chat.message: submitting capture for previous completed turn", sid);
         await dispatchCapture(sid);
       } catch (e) {
-        debugLog("chat.message: failed:", errorMessage(e));
+        log("chat.message: failed", e);
       }
     },
 
@@ -208,7 +204,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         if (input.tool !== "task" || output.args?.subagent_type !== MEMOIR_AGENT_NAME) return;
         captureLifecycle.begin(input.callID);
         if (!backgroundSubagentsEnabled()) {
-          debugLog(
+          log(
             "memoir task remains foreground: OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS is disabled",
           );
           return;
@@ -219,9 +215,9 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         // this hook immediately before TaskTool.execute, so opt only memoir's
         // capture task into OpenCode's native BackgroundJob path here.
         output.args.background = true;
-        infoLog("memoir capture task promoted to native background job");
+        log("memoir capture task promoted to native background job");
       } catch (e) {
-        debugLog("tool.execute.before: failed:", errorMessage(e));
+        log("tool.execute.before: failed", e);
       }
     },
 
@@ -238,7 +234,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         }
         captureLifecycle.finishCall(input.callID);
       } catch (e) {
-        debugLog("tool.execute.after: failed:", errorMessage(e));
+        log("tool.execute.after: failed", e);
         captureLifecycle.finishCall(input.callID);
       }
     },
@@ -250,7 +246,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         const sessionID = event.properties?.sessionID;
         if (sessionID) captureLifecycle.finishSession(sessionID);
       } catch (e) {
-        debugLog("event: failed:", errorMessage(e));
+        log("event: failed", e);
       }
     },
 
@@ -266,7 +262,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
 
         if (input.sessionID && parentSessions.has(sid) && !sessionsWithStartupHint.has(sid)) {
           sessionsWithStartupHint.add(sid);
-          infoLog("system.transform: startup hint injected for session", sid);
+          log("system.transform: startup hint injected for session", sid);
 
           // Hint: the main agent owns proactive recall/store via memory tools.
           // Tool names are intentionally omitted — the agent already sees its
@@ -287,21 +283,21 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
                 output.system?.unshift(
                   `[memoir] Prior context already stored (memoir):\n${summary}`,
                 );
-                infoLog("system.transform: proactive recall injected for session", sid);
+                log("system.transform: proactive recall injected for session", sid);
               }
             } else {
-              infoLog("system.transform: recall skipped (MEMOIR_SUMMARIZE=0)");
+              log("system.transform: recall skipped (MEMOIR_SUMMARIZE=0)");
             }
 
             const status = await callMemoirTool(client, "memoir_status", {});
             if (status) {
               output.system?.unshift(`[memoir] Memory store status:\n${status}`);
-              infoLog("system.transform: store status injected for session", sid);
+              log("system.transform: store status injected for session", sid);
             }
           }
         }
       } catch (e) {
-        debugLog("system.transform: failed:", errorMessage(e));
+        log("system.transform: failed", e);
       }
     },
 
@@ -320,7 +316,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
           }
         }
       } catch (e) {
-        debugLog("dispose: save failed:", errorMessage(e));
+        log("dispose: save failed", e);
       }
       sessionsWithStartupHint.clear();
       parentSessions.clear();
