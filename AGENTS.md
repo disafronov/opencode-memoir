@@ -11,7 +11,7 @@ OpenCode plugin (`opencode-memoir`) that launches the globally installed `memoir
 make install           # npm dependencies + pre-commit/commit-msg/pre-push hooks
 npm run build          # tsc declarations + esbuild bundle to dist/
 npm run typecheck      # tsc --noEmit (strict mode)
-npm test              # tsx --test tests/*.test.ts (Node built-in test runner)
+npm test              # tsx --test --import ./tests/setup.ts tests/*.test.ts (Node built-in test runner)
 npm run test:coverage # optional built-in source coverage report
 
 # Linting & formatting
@@ -20,7 +20,7 @@ npm run lint:fix       # biome check --write src/ tests/
 npm run format         # biome format --write src/ tests/
 
 # Single test file
-npx tsx --test tests/store.test.ts
+npx tsx --test --import ./tests/setup.ts tests/store.test.ts
 
 # Full verification (what CI runs)
 # lint_and_test.yaml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
@@ -82,7 +82,7 @@ All optional:
 
 ## Tests
 
-9 test files, 86 tests total — Node built-in test runner via `tsx --test`.
+9 test files, 86 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_STATE_HOME/opencode/memoir-plugin-*.log`).
 
 | File | Tests | What it covers |
 | ------ | ------: | ---------------- |
