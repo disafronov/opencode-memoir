@@ -23,7 +23,7 @@ typecheck: ## Run TypeScript type checking
 	npx tsc -p tsconfig.json --noEmit
 
 test: ## Run tests
-	NODE_ENV=test npx tsx --test tests/*.test.ts
+	NODE_ENV=test npx tsx --test --import ./tests/setup.ts tests/*.test.ts
 
 coverage: ## Run tests with a source coverage report
 	npm run test:coverage
