@@ -120,7 +120,7 @@ export async function runMemoirSubagent(
           {
             type: "subtask",
             agent: MEMOIR_AGENT_NAME,
-            description: "memoir capture",
+            description: "capture",
             prompt: task,
             command: "",
           },
