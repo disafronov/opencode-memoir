@@ -45,15 +45,16 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 | File | Lines | Role |
 | ------ | ------: | ------ |
-| `src/index.ts` | ~330 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
-| `src/mcp-client.ts` | ~310 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
-| `src/subagent.ts` | ~160 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + supported `promptAsync` runner + model fallback resolution |
-| `src/capture.ts` | ~235 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch retry, and dedup |
+| `src/index.ts` | ~340 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
+| `src/mcp-client.ts` | ~300 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
+| `src/subagent.ts` | ~135 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + supported `promptAsync` runner + model fallback resolution |
+| `src/capture.ts` | ~230 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch retry, and dedup |
 | `src/capture-lifecycle.ts` | ~60 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
 | `src/prompts.ts` | ~20 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
-| `src/store.ts` | ~75 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
+| `src/store.ts` | ~70 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~50 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
-| `src/turn-status.ts` | ~15 | Builds the compact per-turn model status from the `memoir_status` response |
+| `src/status.ts` | ~30 | Shared `parseMemoirStatus` decoder for the `memoir_status` payload (used by `turn-status.ts` and `store.ts`) |
+| `src/turn-status.ts` | ~10 | Builds the compact per-turn model status from the `memoir_status` response |
 | `src/debug.ts` | ~70 | Single `log(...)` entrypoint; always logs, while `MEMOIR_DEBUG=1` adds verbose error details and stacks; destination via `MEMOIR_LOG` |
 
 ### Hooks

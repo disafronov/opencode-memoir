@@ -174,14 +174,11 @@ function lastAssistantMessageId(messages: ChatMessage[]): string | null {
  *
  * @param client   SDK client (transcript source + subagent spawner)
  * @param sessionID parent session id
- * @param directory working directory for the child session (unused — the
- *   running opencode instance is already bound to it; kept for call stability)
  * @param lastCaptured per-session map of already-captured assistant ids
  */
 export async function captureTurn(
   client: unknown,
   sessionID: string,
-  _directory: string,
   lastCaptured: Map<string, string>,
   tools: MemoirToolInfo[] = [],
 ): Promise<void> {

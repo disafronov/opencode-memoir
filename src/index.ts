@@ -78,7 +78,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
     try {
       const client = await connectClient();
       if (client) await branchMatcher.match(client, directory, () => captureLifecycle.drain());
-      await captureTurn(sdkClient, sid, directory, lastCaptured, await discoverTools());
+      await captureTurn(sdkClient, sid, lastCaptured, await discoverTools());
     } catch (e) {
       log("dispatchCapture failed", e);
     } finally {
