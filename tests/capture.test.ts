@@ -168,9 +168,9 @@ describe("buildTurnCaptureTask", () => {
         },
       };
       const seen = new Map<string, string>();
-      await captureTurn(fakeClient, "sid", "/tmp", seen);
+      await captureTurn(fakeClient, "sid", seen);
       assert.strictEqual(seen.has("sid"), false);
-      await captureTurn(fakeClient, "sid", "/tmp", seen);
+      await captureTurn(fakeClient, "sid", seen);
       assert.strictEqual(attempts, 2);
       assert.strictEqual(seen.get("sid"), "a1");
     } finally {
@@ -183,18 +183,12 @@ describe("buildTurnCaptureTask", () => {
 describe("captureTurn", () => {
   it("quietly skips unavailable, invalid, and incomplete transcript APIs", async () => {
     const seen = new Map<string, string>();
-    await captureTurn(null, "missing", "/tmp", seen);
-    await captureTurn(
-      { session: { messages: async () => ({ data: {} }) } },
-      "invalid",
-      "/tmp",
-      seen,
-    );
-    await captureTurn({ session: { messages: async () => ({ data: [] }) } }, "empty", "/tmp", seen);
+    await captureTurn(null, "missing", seen);
+    await captureTurn({ session: { messages: async () => ({ data: {} }) } }, "invalid", seen);
+    await captureTurn({ session: { messages: async () => ({ data: [] }) } }, "empty", seen);
     await captureTurn(
       { session: { messages: async () => ({ data: [userMsg("u1", "question")] }) } },
       "incomplete",
-      "/tmp",
       seen,
     );
     assert.strictEqual(seen.size, 0);
@@ -214,7 +208,7 @@ describe("captureTurn", () => {
         },
       };
       const seen = new Map<string, string>();
-      await captureTurn(client, "sid", "/tmp", seen);
+      await captureTurn(client, "sid", seen);
       assert.strictEqual(prompts, 0);
       assert.strictEqual(seen.get("sid"), "a1");
     } finally {
@@ -231,7 +225,7 @@ describe("captureTurn", () => {
         },
       },
     };
-    await captureTurn(client, "sid", "/tmp", new Map());
+    await captureTurn(client, "sid", new Map());
   });
 
   it("is a no-op and never throws when MEMOIR_AUTO_SAVE=0", async () => {
@@ -248,7 +242,7 @@ describe("captureTurn", () => {
         },
       };
       const seen = new Map<string, string>();
-      await captureTurn(fakeClient, "sid", "/tmp", seen);
+      await captureTurn(fakeClient, "sid", seen);
       assert.equal(captured.length, 0);
     } finally {
       if (prev === undefined) delete process.env.MEMOIR_AUTO_SAVE;
@@ -292,7 +286,7 @@ describe("captureTurn", () => {
         },
       };
       const seen = new Map<string, string>();
-      await captureTurn(fakeClient, "sid", "/tmp", seen);
+      await captureTurn(fakeClient, "sid", seen);
       assert.ok(prompted);
       assert.equal(prompted?.type, "subtask");
       assert.equal(prompted?.agent, "memoir");
@@ -304,7 +298,7 @@ describe("captureTurn", () => {
 
       // deduped on the second call (same last assistant id)
       const again = new Map<string, string>(seen);
-      await captureTurn(fakeClient, "sid", "/tmp", again);
+      await captureTurn(fakeClient, "sid", again);
       assert.equal(again.get("sid"), seen.get("sid"));
     } finally {
       if (prevSave === undefined) delete process.env.MEMOIR_AUTO_SAVE;
