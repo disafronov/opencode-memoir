@@ -262,7 +262,10 @@ export class MemoirRuntime {
             resolve();
             return;
           }
-          const timer = setTimeout(resolve, 1_000);
+          const timer = setTimeout(() => {
+            proc.kill("SIGKILL");
+            resolve();
+          }, 1_000);
           timer.unref();
           proc.once("exit", () => {
             clearTimeout(timer);
