@@ -7,20 +7,23 @@ import { dirname, join } from "node:path";
  *
  * Logs go to a file (never stderr) so they do not pollute the opencode
  * terminal. The destination is controlled by MEMOIR_LOG:
- *   - unset    → $XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log
- *                (falls back to ~/.local/state/opencode/...; daily rotation)
- *   - "stderr" → stderr, for live local debugging without a separate `tail`
+ *   - unset    → $X/opencode/memoir-plugin-YYYY-MM-DD.log
+ *                ($X = XDG_STATE_HOME, falls back to ~/.local/state/...)
+ *   - "stderr" → stderr, for live local debugging
  *   - <path>   → an explicit log file path
+ *
+ * The log path is cached and re-resolved only when MEMOIR_LOG or the date changes,
+ * so writes are fast (single appendFileSync) after the first call.
  *
  * `log(...)` always writes. MEMOIR_DEBUG=1 adds diagnostic detail: Error
  * objects include their name and stack instead of only their message. For
  * local verification, `tail -f` the log file.
  */
 
-/**
- * Resolve the log destination on each write so MEMOIR_LOG changes (and tests)
- * take effect without a reimport. `null` means "write to stderr".
- */
+let cachedLogFile: string | null = null;
+let cachedLogRaw: string | undefined;
+let cachedLogDate: string | undefined;
+
 function resolveLogFile(): string | null {
   const raw = process.env.MEMOIR_LOG;
   if (raw === "stderr") return null;
@@ -28,6 +31,17 @@ function resolveLogFile(): string | null {
   const stateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
   const date = new Date().toISOString().slice(0, 10);
   return join(stateHome, "opencode", `memoir-plugin-${date}.log`);
+}
+
+function getCachedLogFile(): string | null {
+  const raw = process.env.MEMOIR_LOG;
+  const date = new Date().toISOString().slice(0, 10);
+  if (cachedLogRaw !== raw || cachedLogDate !== date) {
+    cachedLogFile = resolveLogFile();
+    cachedLogRaw = raw;
+    cachedLogDate = date;
+  }
+  return cachedLogFile;
 }
 
 function formatValue(value: unknown): string {
@@ -51,7 +65,7 @@ function formatArgs(args: unknown[]): string {
 function writeLog(args: unknown[]): void {
   const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
   const line = `[memoir ${ts}] ${formatArgs(args)}\n`;
-  const logFilePath = resolveLogFile();
+  const logFilePath = getCachedLogFile();
   if (logFilePath) {
     try {
       mkdirSync(dirname(logFilePath), { recursive: true });
