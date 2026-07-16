@@ -105,64 +105,78 @@ export class MemoirRuntime {
     if (this.serverUrl && this.serverProc) return this.serverUrl;
     if (this.startingServer) return this.startingServer;
 
-    const start = (async () => {
-      // Keep the first selected port for this plugin instance. OpenCode stores
-      // the remote URL during config and cannot be pointed at a new random URL
-      // after a child-process crash.
-      const port = this.serverPort ?? (await pickFreeHighPort());
-      this.serverPort = port;
-      const url = new URL(`http://127.0.0.1:${port}/mcp`);
+    const start = (async (): Promise<URL> => {
+      // Retry loop: pickFreeHighPort has a TOCTOU gap (isPortFree → spawn).
+      // If waitForPort times out the port is likely taken — kill the child and
+      // retry with a fresh port.
+      const maxTries = 5;
+      for (let attempt = 0; attempt < maxTries; attempt++) {
+        const port = this.serverPort ?? (await pickFreeHighPort());
+        this.serverPort = port;
+        const url = new URL(`http://127.0.0.1:${port}/mcp`);
 
-      // HTTP flags appended to the base command (which already carries --store).
-      const args = [
-        ...this.command.slice(1),
-        "--http",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(port),
-      ];
+        const args = [
+          ...this.command.slice(1),
+          "--http",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(port),
+        ];
 
-      const proc = spawn(this.command[0], args, {
-        // Merge with the parent env so PATH (and other essentials) survive —
-        // passing only `env` would wipe PATH and break command resolution.
-        env: { ...process.env, ...this.env },
-        // Run in the real (symlink-resolved) project dir so memoir-mcp's
-        // portable store slug is identical whether the repo is entered via a
-        // symlink or its real path.
-        cwd: this.cwd ? safeRealpath(this.cwd) : process.cwd(),
-        stdio: ["ignore", "ignore", "pipe"],
-      });
-      this.serverProc = proc;
-
-      // Route the child's stderr to the debug log instead of the UI.
-      if (proc.stderr) {
-        proc.stderr.on("data", (chunk: Buffer) => {
-          log("memoir-mcp:", chunk.toString().trimEnd());
+        const proc = spawn(this.command[0], args, {
+          env: { ...process.env, ...this.env },
+          cwd: this.cwd ? safeRealpath(this.cwd) : process.cwd(),
+          stdio: ["ignore", "ignore", "pipe"],
         });
+
+        if (proc.stderr) {
+          proc.stderr.on("data", (chunk: Buffer) => {
+            log("memoir-mcp:", chunk.toString().trimEnd());
+          });
+        }
+
+        const exited = new Promise<number | null>((resolve) => {
+          proc.once("exit", (code) => resolve(code));
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          proc.once("spawn", resolve);
+          proc.once("error", reject);
+        }).catch((e: unknown) => {
+          throw new Error(`memoir: failed to spawn ${this.command[0]}: ${errorMessage(e)}`);
+        });
+
+        this.serverProc = proc;
+
+        try {
+          await waitForPort(port);
+        } catch {
+          // Port may be taken — kill the child and retry.
+          proc.kill();
+          await exited;
+          this.serverProc = null;
+          this.serverUrl = null;
+          this.serverPort = null;
+          this.cleanupClient();
+          continue;
+        }
+
+        // Late-exit guard: the port check succeeded but another session may
+        // have already torn this child down. Only register the URL if our proc
+        // is still the active one.
+        if (this.serverProc === proc) {
+          this.serverUrl = url;
+          log("memoir-mcp HTTP server up at", url.toString());
+          return url;
+        }
+
+        this.serverUrl = url;
+        log("memoir-mcp HTTP server up at", url.toString());
+        return url;
       }
-      proc.on("exit", (code) => {
-        log("memoir-mcp HTTP server exited with code", code);
-        // close() may already have killed this process and started another.
-        // A late exit from the old child must not wipe the replacement state.
-        if (this.serverProc !== proc) return;
-        this.serverProc = null;
-        this.serverUrl = null;
-        this.startingServer = null;
-        this.cleanupClient();
-      });
 
-      await new Promise<void>((resolve, reject) => {
-        proc.once("spawn", resolve);
-        proc.once("error", reject);
-      }).catch((e: unknown) => {
-        throw new Error(`memoir: failed to spawn ${this.command[0]}: ${errorMessage(e)}`);
-      });
-
-      await waitForPort(port);
-      this.serverUrl = url;
-      log("memoir-mcp HTTP server up at", url.toString());
-      return url;
+      throw new Error("memoir: could not start HTTP server after several retries");
     })();
 
     this.startingServer = start;
@@ -173,6 +187,7 @@ export class MemoirRuntime {
       this.serverUrl = null;
       if (this.serverProc) this.serverProc.kill();
       this.serverProc = null;
+      this.serverPort = null;
       throw e;
     }
   }
