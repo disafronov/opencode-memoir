@@ -282,7 +282,7 @@ export async function callMemoirTool(
   try {
     const result = (await client.callTool({
       name,
-      arguments: args,
+      arguments: args ?? {},
     })) as { content: Array<{ type: string; text?: string }>; isError?: boolean };
     if (result.isError) {
       log(`callMemoirTool: ${name} returned error`);
