@@ -25,9 +25,9 @@ export const MEMOIR_CHECKOUT_TOOL = "memoir_memoir_checkout";
 // System prompt for the memoir subagent, loaded from prompts/subagent-system.tmpl.
 // It is intentionally tool-free: the subagent is locked to the memoir_* tools
 // via its `permission` ruleset (see buildMemoirAgent), and opencode already
-// exposes those tools to it. The exact tool catalog — names + descriptions — is
-// injected per call into the task prompt by buildTurnCaptureTask, so this prompt
-// stays generic and reusable across memoir-mcp versions.
+// exposes those tools to it. The task prompt no longer carries the tool catalog
+// (it was removed); the subagent relies on its static memoir_* permissions
+// instead, so this prompt stays generic and reusable across memoir-mcp versions.
 const MEMOIR_AGENT_PROMPT = loadPrompt("subagent-system.tmpl");
 
 /**

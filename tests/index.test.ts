@@ -339,9 +339,6 @@ describe("MemoirOpenCode factory", () => {
     const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
     const codeBranch = currentGitBranch(process.cwd());
     const mcpClient = {
-      listTools: async () => ({
-        tools: [{ name: "memoir_remember", description: "Store durable memory" }],
-      }),
       callTool: async (input: { name: string; arguments?: Record<string, unknown> }) => {
         calls.push(input);
         const text =
@@ -408,11 +405,11 @@ describe("MemoirOpenCode factory", () => {
       assert.ok(calls.some((call) => call.name === "memoir_summarize"));
       assert.ok(calls.some((call) => call.name === "memoir_status"));
       assert.ok(calls.some((call) => call.name === "memoir_remember"));
-      assert.ok(
-        capturePrompts.some((prompt) =>
-          prompt.includes("memoir_memoir_remember — Store durable memory"),
-        ),
-      );
+      // The task prompt no longer carries the injected tool catalog; it embeds
+      // the transcript and keeps the report-format marker.
+      assert.ok(capturePrompts.some((prompt) => prompt.includes("TURN TRANSCRIPT")));
+      assert.ok(capturePrompts.some((prompt) => prompt.includes("Captured 0 memories")));
+      assert.ok(capturePrompts.every((prompt) => !prompt.includes("Store durable memory")));
       assert.strictEqual(start.mock.callCount(), 1);
       assert.ok(connect.mock.callCount() >= 1);
     } finally {

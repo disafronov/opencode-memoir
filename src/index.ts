@@ -67,18 +67,13 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
     }
   };
 
-  const discoverTools = async () => {
-    const client = await connectClient();
-    return client ? runtime.listTools(client) : [];
-  };
-
   const dispatchCapture = async (sid: string): Promise<void> => {
     if (!sdkClient || !parentSessions.has(sid) || capturePending.has(sid)) return;
     capturePending.add(sid);
     try {
       const client = await connectClient();
       if (client) await branchMatcher.match(client, directory, () => captureLifecycle.drain());
-      await captureTurn(sdkClient, sid, lastCaptured, await discoverTools());
+      await captureTurn(sdkClient, sid, lastCaptured);
     } catch (e) {
       log("dispatchCapture failed", e);
     } finally {

@@ -9,11 +9,6 @@ interface MemoirClientState {
   client: Client;
 }
 
-export type MemoirToolInfo = {
-  name: string;
-  description: string;
-};
-
 type ClientConnection = {
   client: Client;
   transport: StreamableHTTPClientTransport;
@@ -86,7 +81,6 @@ export class MemoirRuntime {
   private serverUrl: URL | null = null;
   private serverPort: number | null = null;
   private startingServer: Promise<URL> | null = null;
-  private tools: MemoirToolInfo[] | null = null;
 
   constructor(
     private readonly command: string[],
@@ -98,7 +92,6 @@ export class MemoirRuntime {
   private cleanupClient(): void {
     this.state = null;
     this.connecting = null;
-    this.tools = null;
   }
 
   async start(): Promise<URL> {
@@ -224,25 +217,6 @@ export class MemoirRuntime {
     return this.connecting;
   }
 
-  /** Discover the live tool catalog once per connection for the small-model prompt. */
-  async listTools(client: Client): Promise<MemoirToolInfo[]> {
-    if (this.tools) return this.tools;
-    try {
-      const result = await client.listTools();
-      this.tools = (result.tools ?? []).map((tool) => ({
-        // OpenCode exposes remote MCP tools as <server>_<raw-name>. The server
-        // is registered as "memoir", so the prompt must use the same names the
-        // subagent actually sees (for example memoir_memoir_remember).
-        name: `memoir_${tool.name}`,
-        description: typeof tool.description === "string" ? tool.description : "",
-      }));
-      return this.tools;
-    } catch (e) {
-      log("MemoirRuntime.listTools failed", e);
-      return [];
-    }
-  }
-
   /** Close the MCP client and stop this instance's HTTP server. */
   async close(): Promise<void> {
     if (this.state) {
@@ -284,7 +258,6 @@ export class MemoirRuntime {
     this.serverUrl = null;
     this.startingServer = null;
     this.connecting = null;
-    this.tools = null;
   }
 }
 
