@@ -114,38 +114,4 @@ describe("MemoirRuntime", () => {
     await runtime.close();
     assert.strictEqual(attempts, 2);
   });
-
-  it("discovers and caches the live tool catalog per connection", async () => {
-    let calls = 0;
-    const client = {
-      listTools: async () => {
-        calls++;
-        return {
-          tools: [
-            { name: "memoir_remember", description: "store" },
-            { name: "memoir_get", description: 42 },
-          ],
-        };
-      },
-    };
-    const runtime = new MemoirRuntime([process.execPath, fixture]);
-    const first = await runtime.listTools(client as never);
-    const second = await runtime.listTools(client as never);
-    assert.deepStrictEqual(first, [
-      { name: "memoir_memoir_remember", description: "store" },
-      { name: "memoir_memoir_get", description: "" },
-    ]);
-    assert.strictEqual(second, first);
-    assert.strictEqual(calls, 1);
-  });
-
-  it("returns an empty catalog when discovery fails", async () => {
-    const runtime = new MemoirRuntime([process.execPath, fixture]);
-    const client = {
-      listTools: async () => {
-        throw "catalog failed";
-      },
-    };
-    assert.deepStrictEqual(await runtime.listTools(client as never), []);
-  });
 });

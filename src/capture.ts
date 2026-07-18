@@ -1,7 +1,6 @@
 import { log } from "./debug.js";
-import type { MemoirToolInfo } from "./mcp-client.js";
 import { loadPrompt } from "./prompts.js";
-import { MEMOIR_CHECKOUT_TOOL, runMemoirSubagent } from "./subagent.js";
+import { runMemoirSubagent } from "./subagent.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,17 +138,8 @@ const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
  * durability checks, writes each fact with an explicit 3-level taxonomy path,
  * and returns a compact report based only on confirmed tool outcomes.
  */
-export function buildTurnCaptureTask(transcript: string, tools: MemoirToolInfo[] = []): string {
-  const captureTools = tools.filter((tool) => tool.name !== MEMOIR_CHECKOUT_TOOL);
-  const toolsSection = captureTools.length
-    ? `Available memory tools (name — what it does):\n${captureTools
-        .map((tool) => `- ${tool.name} — ${tool.description}`)
-        .join("\n")}\n`
-    : "";
-  return CAPTURE_TASK_TEMPLATE.replace("{{TOOLS_SECTION}}", toolsSection).replace(
-    "{{TRANSCRIPT}}",
-    transcript,
-  );
+export function buildTurnCaptureTask(transcript: string): string {
+  return CAPTURE_TASK_TEMPLATE.replace("{{TRANSCRIPT}}", transcript);
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +170,6 @@ export async function captureTurn(
   client: unknown,
   sessionID: string,
   lastCaptured: Map<string, string>,
-  tools: MemoirToolInfo[] = [],
 ): Promise<void> {
   if (!autoSaveEnabled()) {
     log("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
@@ -219,7 +208,7 @@ export async function captureTurn(
     }
 
     log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
-    await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript, tools));
+    await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript));
     lastCaptured.set(sessionID, turnId);
   } catch (e) {
     log("captureTurn failed", e);

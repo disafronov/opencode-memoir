@@ -8,7 +8,6 @@ describe("loadPrompt", () => {
     const text = loadPrompt("capture-task.tmpl");
     assert.match(text, /Captured N memories/);
     assert.match(text, /actual tool outcomes/);
-    assert.match(text, /\{\{TOOLS_SECTION\}\}/);
     assert.match(text, /\{\{TRANSCRIPT\}\}/);
   });
 
