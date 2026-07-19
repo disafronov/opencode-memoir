@@ -8,7 +8,6 @@ import { safeRealpath } from "./path.js";
 import { loadPrompt } from "./prompts.js";
 import { deriveStorePath, MemoirBranchMatcher } from "./store.js";
 import { buildMemoirAgent, MEMOIR_AGENT_NAME, resolveMemoirModel } from "./subagent.js";
-import { buildTurnStatus } from "./turn-status.js";
 
 function envFlag(name: string): boolean | undefined {
   const value = process.env[name]?.trim().toLowerCase();
@@ -41,13 +40,11 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const environment = storePath ? { MEMOIR_STORE: storePath } : undefined;
   const runtime = new MemoirRuntime(mcpCommand, environment, directory);
   const branchMatcher = new MemoirBranchMatcher();
-  const sessionsWithStartupHint = new Set<string>();
   const parentSessions = new Set<string>();
   const lastCaptured = new Map<string, string>();
   const capturePending = new Set<string>();
   const captureLifecycle = new CaptureLifecycle();
   const messageCounts = new Map<string, number>();
-  const turnStatus = new Map<string, string>();
 
   // The plugin owns a single shared memoir-mcp HTTP server (started in the
   // config hook). opencode connects to it as a remote MCP server; the plugin's
@@ -170,10 +167,6 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         const client = await connectClient();
         if (client) {
           await branchMatcher.match(client, directory, () => captureLifecycle.drain());
-          const status = await callMemoirTool(client, "memoir_status", {});
-          const line = buildTurnStatus(status);
-          if (line) turnStatus.set(sid, line);
-          else turnStatus.delete(sid);
         }
 
         // chat.message runs before the new user message is persisted, so the
@@ -244,57 +237,6 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       }
     },
 
-    "experimental.chat.system.transform": async (
-      input: { sessionID?: string },
-      output: { system?: string[] },
-    ): Promise<void> => {
-      try {
-        const sid = input.sessionID ?? "default";
-
-        const status = turnStatus.get(sid);
-        if (status) output.system?.push(status);
-
-        if (input.sessionID && parentSessions.has(sid) && !sessionsWithStartupHint.has(sid)) {
-          sessionsWithStartupHint.add(sid);
-          log("system.transform: startup hint injected for session", sid);
-
-          // Hint: the main agent owns proactive recall/store via memory tools.
-          // Tool names are intentionally omitted — the agent already sees its
-          // allowed memoir_* tools, so naming them here would just be hardcode.
-          // The text lives in prompts/startup-hint.tmpl for easy editing.
-          output.system?.unshift(loadPrompt("startup-hint.tmpl"));
-
-          // Proactive context: surface what memoir already holds + the active
-          // store status so the agent starts oriented. Both are cheap and
-          // LLM-free. The client is fetched once and reused for both calls.
-          const client = await connectClient();
-          if (client) {
-            if (process.env.MEMOIR_SUMMARIZE !== "0") {
-              const summary = await callMemoirTool(client, "memoir_summarize", {
-                depth: 1,
-              });
-              if (summary) {
-                output.system?.unshift(
-                  `[memoir] Prior context already stored (memoir):\n${summary}`,
-                );
-                log("system.transform: proactive recall injected for session", sid);
-              }
-            } else {
-              log("system.transform: recall skipped (MEMOIR_SUMMARIZE=0)");
-            }
-
-            const status = await callMemoirTool(client, "memoir_status", {});
-            if (status) {
-              output.system?.unshift(`[memoir] Memory store status:\n${status}`);
-              log("system.transform: store status injected for session", sid);
-            }
-          }
-        }
-      } catch (e) {
-        log("system.transform: failed", e);
-      }
-    },
-
     dispose: async (): Promise<void> => {
       try {
         if (process.env.MEMOIR_AUTO_SAVE === "1") {
@@ -312,13 +254,11 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       } catch (e) {
         log("dispose: save failed", e);
       }
-      sessionsWithStartupHint.clear();
       parentSessions.clear();
       capturePending.clear();
       captureLifecycle.clear();
       branchMatcher.clear();
       messageCounts.clear();
-      turnStatus.clear();
       lastCaptured.clear();
       await runtime.close();
     },

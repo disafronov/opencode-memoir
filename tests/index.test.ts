@@ -3,7 +3,6 @@ import { describe, it, mock } from "node:test";
 
 import plugin from "../src/index.ts";
 import { MemoirRuntime } from "../src/mcp-client.ts";
-import { currentGitBranch } from "../src/store.ts";
 
 describe("plugin module shape", () => {
   it("exports default with id and server", () => {
@@ -240,11 +239,6 @@ describe("MemoirOpenCode factory", () => {
     }
   });
 
-  it("returns system.transform hook", async () => {
-    const hooks = await plugin.server(undefined, {});
-    assert.strictEqual(typeof hooks["experimental.chat.system.transform"], "function");
-  });
-
   it("returns dispose hook", async () => {
     const hooks = await plugin.server(undefined, {});
     assert.strictEqual(typeof hooks.dispose, "function");
@@ -337,17 +331,10 @@ describe("MemoirOpenCode factory", () => {
     const previousAutoSave = process.env.MEMOIR_AUTO_SAVE;
     process.env.MEMOIR_AUTO_SAVE = "1";
     const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
-    const codeBranch = currentGitBranch(process.cwd());
     const mcpClient = {
       callTool: async (input: { name: string; arguments?: Record<string, unknown> }) => {
         calls.push(input);
-        const text =
-          input.name === "memoir_summarize"
-            ? JSON.stringify({ total: 29, namespaces: { default: { preferences: 29 } } })
-            : input.name === "memoir_status"
-              ? JSON.stringify({ branch: codeBranch, memory_count: 31 })
-              : "ok";
-        return { content: [{ type: "text", text }] };
+        return { content: [{ type: "text", text: "ok" }] };
       },
     };
     const start = mock.method(
@@ -390,20 +377,7 @@ describe("MemoirOpenCode factory", () => {
         );
       }
 
-      const output = { system: [] as string[] };
-      await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, output);
-      await new Promise((resolve) => setImmediate(resolve));
-      assert.ok(output.system.some((line) => line.includes('"total":29')));
-      assert.ok(output.system.some((line) => line.includes(`memory available (31 memories)`)));
-
-      const second = { system: [] as string[] };
-      await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, second);
-      assert.ok(second.system.some((line) => line.includes(`memory available (31 memories)`)));
-      assert.ok(second.system.every((line) => !line.includes('"total":29')));
-
       await hooks.dispose();
-      assert.ok(calls.some((call) => call.name === "memoir_summarize"));
-      assert.ok(calls.some((call) => call.name === "memoir_status"));
       assert.ok(calls.some((call) => call.name === "memoir_remember"));
       // The task prompt is now just the raw transcript; all instructions
       // live in the subagent's system prompt.
@@ -439,7 +413,6 @@ describe("MemoirOpenCode factory", () => {
         existing: { type: "local" },
       });
       await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
-      await hooks["experimental.chat.system.transform"]({ sessionID: "parent" }, { system: [] });
       await hooks.dispose();
     } finally {
       start.mock.restore();

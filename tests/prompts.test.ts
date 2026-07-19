@@ -7,8 +7,8 @@ describe("loadPrompt", () => {
   it("loads a template verbatim with its placeholders intact", () => {
     const text = loadPrompt("subagent-system.tmpl");
     assert.match(text, /Every time you receive input/);
-    assert.match(text, /Captured N memories/);
-    assert.match(text, /Store in the default namespace/);
+    assert.match(text, /If you wrote at least one memory/);
+    assert.match(text, /return nothing at all — no text/);
   });
 
   it("returns the same cached string reference on repeated calls", () => {
