@@ -20,7 +20,7 @@ npm run lint:fix       # biome check --write src/ tests/
 npm run format         # biome format --write src/ tests/
 
 # Single test file
-npx tsx --test --import ./tests/setup.ts tests/store.test.ts
+npx tsx --test --import ./tests/setup.ts tests/index.test.ts
 
 # Full verification (what CI runs)
 # lint_and_test.yaml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
@@ -45,15 +45,14 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 | File | Lines | Role |
 | ------ | ------: | ------ |
-| `src/index.ts` | ~340 | Plugin entry: subagent + MCP registration, all hooks, capture wiring, dispose |
-| `src/mcp-client.ts` | ~300 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + cached live tool catalog + `callMemoirTool`; reconnectable lifecycle |
+| `src/index.ts` | ~337 | Plugin entry: `currentGitBranch` + `MemoirBranchMatcher` (exported for tests), subagent + MCP registration, all hooks, capture wiring, dispose |
+| `src/mcp-client.ts` | ~283 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + `callMemoirTool`; reconnectable lifecycle |
 | `src/subagent.ts` | ~135 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + supported `promptAsync` runner + model fallback resolution |
 | `src/capture.ts` | ~230 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch retry, and dedup |
 | `src/capture-lifecycle.ts` | ~60 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
 | `src/prompts.ts` | ~20 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
-| `src/store.ts` | ~70 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~50 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
-| `src/status.ts` | ~30 | Shared `parseMemoirStatus` decoder for the `memoir_status` payload (used by `store.ts`) |
+| `src/status.ts` | ~30 | Shared `parseMemoirStatus` decoder for the `memoir_status` payload (used by `index.ts` branch matcher) |
 | `src/debug.ts` | ~70 | Single `log(...)` entrypoint; always logs, while `MEMOIR_DEBUG=1` adds verbose error details and stacks; destination via `MEMOIR_LOG` |
 
 ### Hooks
@@ -64,7 +63,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 - **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
 - **`dispose`** — Saves session markers only when `MEMOIR_AUTO_SAVE=1` is explicit, closes the instance MCP process, and clears pending state
 
-Runtime hook failures are contained and logged. Capture uses OpenCode's supported `promptAsync` input and waits only for its immediate `204 No Content` acceptance; subagent execution remains foreground or native-background according to the OpenCode flags. Its child session is intentionally visible as a collapsed subagent in the parent timeline, writes through `memoir_remember`, and returns a compact outcome report to the parent task.
+Runtime hook failures are contained and logged. Capture uses OpenCode's supported `promptAsync` input and waits only for its immediate `204 No Content` acceptance; subagent execution remains foreground or native-background according to the OpenCode flags. Its child session is intentionally visible as a collapsed subagent in the parent timeline and writes through `memoir_remember`; by contract the subagent never emits any response — the correct outcome is the absence of any reply.
 
 ## Environment Variables
 
