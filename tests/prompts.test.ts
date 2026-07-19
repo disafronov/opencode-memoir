@@ -6,9 +6,13 @@ import { loadPrompt } from "../src/prompts.ts";
 describe("loadPrompt", () => {
   it("loads a template verbatim with its placeholders intact", () => {
     const text = loadPrompt("subagent-system.tmpl");
-    assert.match(text, /Every time you receive input/);
+    assert.match(text, /## WHO YOU ARE/);
+    assert.match(text, /## WHAT TO DO/);
+    assert.match(text, /## WHAT NOT TO DO/);
     assert.match(text, /NEVER OUTPUT ANY TEXT/);
-    assert.match(text, /NO RESPONSE AT ALL/);
+    assert.match(text, /NEVER RETURN A RESPONSE/);
+    assert.match(text, /NEVER switch the memoir branch/);
+    assert.match(text, /!!!$/m);
   });
 
   it("returns the same cached string reference on repeated calls", () => {
