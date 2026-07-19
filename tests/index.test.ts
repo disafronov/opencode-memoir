@@ -405,11 +405,15 @@ describe("MemoirOpenCode factory", () => {
       assert.ok(calls.some((call) => call.name === "memoir_summarize"));
       assert.ok(calls.some((call) => call.name === "memoir_status"));
       assert.ok(calls.some((call) => call.name === "memoir_remember"));
-      // The task prompt no longer carries the injected tool catalog; it embeds
-      // the transcript and keeps the report-format marker.
-      assert.ok(capturePrompts.some((prompt) => prompt.includes("TURN TRANSCRIPT")));
-      assert.ok(capturePrompts.some((prompt) => prompt.includes("Captured 0 memories")));
-      assert.ok(capturePrompts.every((prompt) => !prompt.includes("Store durable memory")));
+      // The task prompt is now just the raw transcript; all instructions
+      // live in the subagent's system prompt.
+      assert.ok(
+        capturePrompts.some((prompt) => prompt.includes("USER") && prompt.includes("saved")),
+      );
+      assert.ok(
+        capturePrompts.every((prompt) => prompt.includes("USER") || prompt.includes("ASSISTANT")),
+      );
+      assert.ok(capturePrompts.every((prompt) => !prompt.includes("Captured")));
       assert.strictEqual(start.mock.callCount(), 1);
       assert.ok(connect.mock.callCount() >= 1);
     } finally {
