@@ -155,15 +155,6 @@ export class MemoirRuntime {
           continue;
         }
 
-        // Late-exit guard: the port check succeeded but another session may
-        // have already torn this child down. Only register the URL if our proc
-        // is still the active one.
-        if (this.serverProc === proc) {
-          this.serverUrl = url;
-          log("memoir-mcp HTTP server up at", url.toString());
-          return url;
-        }
-
         this.serverUrl = url;
         log("memoir-mcp HTTP server up at", url.toString());
         return url;

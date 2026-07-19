@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-
-import { currentGitBranch, deriveStorePath, MemoirBranchMatcher } from "../src/store.ts";
+import { currentGitBranch, MemoirBranchMatcher } from "../src/index.ts";
+import { deriveStorePath } from "../src/path.ts";
 
 const tempRepos = new Set<string>();
 
@@ -51,7 +51,7 @@ describe("deriveStorePath", () => {
 
 describe("currentGitBranch", () => {
   it("returns empty string when not in a git repo", async () => {
-    const mod = await import("../src/store.ts");
+    const mod = await import("../src/index.ts");
     assert.strictEqual(mod.currentGitBranch("/nonexistent-path"), "");
   });
 });
