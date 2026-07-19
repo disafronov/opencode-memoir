@@ -1,9 +1,8 @@
 /**
  * Parsed shape of the `memoir_status` tool response.
  *
- * Both the per-turn model status (turn-status.ts) and the branch matcher
- * (store.ts) read this payload, so the parse lives here once instead of being
- * duplicated with two slightly different decoders.
+ * The branch matcher (store.ts) reads this payload, so the parse lives here
+ * once instead of being duplicated across callers.
  */
 export type MemoirStatus = {
   branch?: string;

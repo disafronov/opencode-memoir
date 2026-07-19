@@ -83,7 +83,6 @@ All optional:
 | `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; waits for `promptAsync` to accept the visible capture task while ignoring synthetic and memoir-child messages |
 | `tool.execute.before` | Marks memoir's `task` invocation with `background: true` when OpenCode background subagents are enabled |
 | `tool.execute.after` + `event` | Tracks foreground completion and known background child idle/error events so checkout does not overlap an active capture |
-| `experimental.chat.system.transform` | Compact status after real parent messages + startup hint and proactive recall once per session |
 | `dispose` | Saves session markers when `MEMOIR_AUTO_SAVE=1` is explicit, closes the project MCP process, and clears instance state |
 
 ## How it works
@@ -100,8 +99,6 @@ After each real parent-session message, every model call in that turn receives a
 - `OPENCODE_EXPERIMENTAL=true` has the same effect unless the dedicated background-subagent flag is explicitly false, matching OpenCode's native precedence.
 - Without either enabling flag, the plugin does not add `background`; OpenCode runs the same capture task through the original foreground subagent path. Memory capture remains available, but the parent session may wait for it to finish.
 - Before changing the shared memoir branch, the plugin waits for active foreground tasks (`tool.execute.after`) and native background tasks (the known child session's terminal idle/error event). A timeout defers checkout instead of moving the store underneath a running capture.
-
-At session start, `experimental.chat.system.transform` injects a recall hint plus a `memoir_summarize` snapshot so the agent begins with prior context.
 
 ## Development
 
@@ -130,7 +127,6 @@ npm test         # run the test suite
 | `src/store.ts` | Store path derivation and serialized store-branch matching |
 | `src/path.ts` | Symlink-safe project and store path helpers |
 | `src/prompts.ts` | Cached prompt-template loader |
-| `src/turn-status.ts` | Compact model-facing status formatter |
 | `src/debug.ts` | File/stderr lifecycle and debug logger |
 
 ## Publishing

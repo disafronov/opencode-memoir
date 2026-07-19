@@ -53,8 +53,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 | `src/prompts.ts` | ~20 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
 | `src/store.ts` | ~70 | Explicit-directory store derivation and instance-owned, serialized store-branch matcher |
 | `src/path.ts` | ~50 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
-| `src/status.ts` | ~30 | Shared `parseMemoirStatus` decoder for the `memoir_status` payload (used by `turn-status.ts` and `store.ts`) |
-| `src/turn-status.ts` | ~10 | Builds the compact per-turn model status from the `memoir_status` response |
+| `src/status.ts` | ~30 | Shared `parseMemoirStatus` decoder for the `memoir_status` payload (used by `store.ts`) |
 | `src/debug.ts` | ~70 | Single `log(...)` entrypoint; always logs, while `MEMOIR_DEBUG=1` adds verbose error details and stacks; destination via `MEMOIR_LOG` |
 
 ### Hooks
@@ -63,7 +62,6 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 - **`shell.env`** — Injects `MEMOIR_STORE` into shell environment
 - **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, refreshes the compact model status, and waits for `promptAsync` to accept the visible task; ignores synthetic and memoir-child messages so capture cannot trigger itself
 - **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
-- **`experimental.chat.system.transform`** — Compact current status (every model call in the turn) + startup hint and proactive recall (once/session)
 - **`dispose`** — Saves session markers only when `MEMOIR_AUTO_SAVE=1` is explicit, closes the instance MCP process, and clears pending state
 
 Runtime hook failures are contained and logged. Capture uses OpenCode's supported `promptAsync` input and waits only for its immediate `204 No Content` acceptance; subagent execution remains foreground or native-background according to the OpenCode flags. Its child session is intentionally visible as a collapsed subagent in the parent timeline, writes through `memoir_remember`, and returns a compact outcome report to the parent task.
