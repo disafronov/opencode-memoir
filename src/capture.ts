@@ -1,5 +1,4 @@
 import { log } from "./debug.js";
-import { loadPrompt } from "./prompts.js";
 import { runMemoirSubagent } from "./subagent.js";
 
 // ---------------------------------------------------------------------------
@@ -128,21 +127,6 @@ export function shouldCaptureTurn(
 }
 
 // ---------------------------------------------------------------------------
-// Task builder (mirrors plugins/claude-code/hooks/stop_capture.tmpl)
-// ---------------------------------------------------------------------------
-
-const CAPTURE_TASK_TEMPLATE = loadPrompt("capture-task.tmpl");
-
-/**
- * Build the capture task handed to the memoir subagent. It applies the
- * durability checks, writes each fact with an explicit 3-level taxonomy path,
- * and returns a compact report based only on confirmed tool outcomes.
- */
-export function buildTurnCaptureTask(transcript: string): string {
-  return CAPTURE_TASK_TEMPLATE.replace("{{TRANSCRIPT}}", transcript);
-}
-
-// ---------------------------------------------------------------------------
 // Capture orchestration
 // ---------------------------------------------------------------------------
 
@@ -208,7 +192,7 @@ export async function captureTurn(
     }
 
     log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
-    await runMemoirSubagent(client, sessionID, buildTurnCaptureTask(transcript));
+    await runMemoirSubagent(client, sessionID, transcript);
     lastCaptured.set(sessionID, turnId);
   } catch (e) {
     log("captureTurn failed", e);

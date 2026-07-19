@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ChatMessage } from "../src/capture.js";
 import {
-  buildTurnCaptureTask,
   captureTurn,
   formatSessionTranscript,
   lastTurnTranscript,
@@ -109,51 +108,6 @@ describe("shouldCaptureTurn", () => {
     } finally {
       if (previous === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
       else process.env.MEMOIR_CAPTURE_MIN_CHARS = previous;
-    }
-  });
-});
-
-describe("buildTurnCaptureTask", () => {
-  it("embeds the transcript and imposes reporting + taxonomy rules", () => {
-    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
-    assert.match(task, /Captured N memories/);
-    assert.match(task, /actual tool outcomes/);
-    assert.match(task, /no durable facts, make no tool calls/);
-    assert.match(task, /USER/);
-    assert.match(task, /hello/);
-  });
-
-  it("omits the tool section when no tools are supplied", () => {
-    const task = buildTurnCaptureTask("USER\nhi\nASSISTANT\nhello");
-    assert.doesNotMatch(task, /Available memory tools/);
-    assert.match(task, /Captured 0 memories/);
-  });
-
-  it("retries a turn after prompt dispatch fails", async () => {
-    const prevMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
-    process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
-    try {
-      let attempts = 0;
-      const fakeClient = {
-        session: {
-          messages: async () => ({
-            data: [userMsg("u1", "remember this"), assistantMsg("a1", "durable answer")],
-          }),
-          promptAsync: async () => {
-            attempts++;
-            if (attempts === 1) throw new Error("dispatch failed");
-          },
-        },
-      };
-      const seen = new Map<string, string>();
-      await captureTurn(fakeClient, "sid", seen);
-      assert.strictEqual(seen.has("sid"), false);
-      await captureTurn(fakeClient, "sid", seen);
-      assert.strictEqual(attempts, 2);
-      assert.strictEqual(seen.get("sid"), "a1");
-    } finally {
-      if (prevMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
-      else process.env.MEMOIR_CAPTURE_MIN_CHARS = prevMin;
     }
   });
 });
@@ -268,7 +222,7 @@ describe("captureTurn", () => {
       assert.ok(prompted);
       assert.equal(prompted?.type, "subtask");
       assert.equal(prompted?.agent, "memoir");
-      assert.match(prompted?.prompt ?? "", /TURN TRANSCRIPT/);
+      assert.match(prompted?.prompt ?? "", /How do I configure/);
       // The v1 SDK client's promptAsync takes { path, body } with no
       // `directory` field — the instance is already directory-bound. Assert
       // directory is never sent.

@@ -5,10 +5,10 @@ import { loadPrompt } from "../src/prompts.ts";
 
 describe("loadPrompt", () => {
   it("loads a template verbatim with its placeholders intact", () => {
-    const text = loadPrompt("capture-task.tmpl");
+    const text = loadPrompt("subagent-system.tmpl");
+    assert.match(text, /Every time you receive input/);
     assert.match(text, /Captured N memories/);
-    assert.match(text, /actual tool outcomes/);
-    assert.match(text, /\{\{TRANSCRIPT\}\}/);
+    assert.match(text, /Store in the default namespace/);
   });
 
   it("returns the same cached string reference on repeated calls", () => {
