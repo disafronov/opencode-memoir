@@ -6,9 +6,9 @@ import { loadPrompt } from "../src/prompts.ts";
 describe("loadPrompt", () => {
   it("loads a template verbatim with its placeholders intact", () => {
     const text = loadPrompt("subagent-system.tmpl");
-    assert.match(text, /## WHO YOU ARE/);
-    assert.match(text, /## WHAT TO DO/);
-    assert.match(text, /## WHAT NOT TO DO/);
+    assert.match(text, /# WHO YOU ARE/);
+    assert.match(text, /# WHAT TO DO/);
+    assert.match(text, /# WHAT NOT TO DO/);
     assert.match(text, /NEVER OUTPUT ANY TEXT/);
     assert.match(text, /NEVER RETURN A RESPONSE/);
     assert.match(text, /NEVER switch the memoir branch/);
