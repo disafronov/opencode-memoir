@@ -1,6 +1,6 @@
 {
   "name": "opencode-memoir",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "Memoir memory plugin for OpenCode — Git-versioned, taxonomy-structured AI memory.",
   "type": "module",
   "main": "dist/index.js",
