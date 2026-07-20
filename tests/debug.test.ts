@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 
-import { log } from "../src/debug.ts";
+import { log, resetProjectContext, setProjectContext } from "../src/debug.ts";
 
 const files = new Set<string>();
 
@@ -18,6 +18,7 @@ function useTempLog(): string {
 afterEach(() => {
   delete process.env.MEMOIR_DEBUG;
   delete process.env.MEMOIR_LOG;
+  resetProjectContext();
   for (const file of files) rmSync(file, { force: true });
   files.clear();
 });
@@ -66,5 +67,21 @@ describe("log", () => {
     process.env.MEMOIR_DEBUG = "1";
     log("configured destination");
     assert.match(readFileSync(file, "utf8"), /configured destination/);
+  });
+});
+
+describe("setProjectContext", () => {
+  it("includes project slug in log output when set", () => {
+    const file = useTempLog();
+    setProjectContext("my-project");
+    log("hello");
+    assert.match(readFileSync(file, "utf8"), /\[memoir .+\] \[my-project\] hello\n/);
+  });
+
+  it("omits project slug bracket when not set", () => {
+    const file = useTempLog();
+    log("hello");
+    assert.match(readFileSync(file, "utf8"), /\[memoir .+\] hello\n/);
+    assert.doesNotMatch(readFileSync(file, "utf8"), /\[memoir .+\] \[/);
   });
 });

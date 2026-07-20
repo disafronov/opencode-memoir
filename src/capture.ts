@@ -149,11 +149,13 @@ function lastAssistantMessageId(messages: ChatMessage[]): string | null {
  * @param client   SDK client (transcript source + subagent spawner)
  * @param sessionID parent session id
  * @param lastCaptured per-session map of already-captured assistant ids
+ * @param model optional model override for the memoir subagent
  */
 export async function captureTurn(
   client: unknown,
   sessionID: string,
   lastCaptured: Map<string, string>,
+  model?: string,
 ): Promise<void> {
   if (!autoSaveEnabled()) {
     log("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
@@ -192,7 +194,7 @@ export async function captureTurn(
     }
 
     log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
-    await runMemoirSubagent(client, sessionID, transcript);
+    await runMemoirSubagent(client, sessionID, transcript, model);
     lastCaptured.set(sessionID, turnId);
   } catch (e) {
     log("captureTurn failed", e);
