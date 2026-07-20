@@ -70,7 +70,7 @@ Runtime hook failures are contained and logged. Capture uses OpenCode's supporte
 All optional:
 
 - `MEMOIR_DEBUG=1` — Adds verbose diagnostics and passed `Error` stacks. Without it, normal lifecycle entries and concise error messages are still logged.
-- `MEMOIR_LOG` — Log destination: unset → `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log` (daily rotation, never stderr); `stderr` → live stderr (local debugging); any other value → explicit file path. Logs never pollute the opencode terminal by default.
+- `MEMOIR_LOG` — Log destination: unset → `$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log` (daily rotation, alongside `opencode.log`); `stderr` → live stderr (local debugging); any other value → explicit file path. Each log line includes the project slug for multi-project identification.
 - `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
 - `MEMOIR_AUTO_SAVE` — **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it. Separate from that, persisting per-session markers at `dispose` only happens when this is set **explicitly to `1`** — by default the dispose-time markers are not written.
 - `MEMOIR_AGENT_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
@@ -88,7 +88,7 @@ All optional:
 | `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
 | `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
 | `tests/index.test.ts` | 23 | Module shape, hook behavior, prompt acceptance ordering, background flag parity, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
-| `tests/debug.test.ts` | 6 | Always-on lifecycle logging, debug error detail, argument formatting, and configured file output |
+| `tests/debug.test.ts` | 8 | Always-on lifecycle logging, debug error detail, argument formatting, and configured file output |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |
 | `tests/turn-status.test.ts` | 2 | Status formatting, partial responses, and malformed-response degradation |

@@ -125,7 +125,10 @@ export class MemoirRuntime {
 
         if (proc.stderr) {
           proc.stderr.on("data", (chunk: Buffer) => {
-            log("memoir-mcp:", chunk.toString().trimEnd());
+            for (const line of chunk.toString().split("\n")) {
+              const trimmed = line.trimEnd();
+              if (trimmed) log("memoir-mcp:", trimmed);
+            }
           });
         }
 

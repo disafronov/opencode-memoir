@@ -7,8 +7,8 @@ import { dirname, join } from "node:path";
  *
  * Logs go to a file (never stderr) so they do not pollute the opencode
  * terminal. The destination is controlled by MEMOIR_LOG:
- *   - unset    → $X/opencode/memoir-plugin-YYYY-MM-DD.log
- *                ($X = XDG_STATE_HOME, falls back to ~/.local/state/...)
+ *   - unset    → $X/opencode/log/memoir/YYYY-MM-DD.log
+ *                ($X = XDG_DATA_HOME, falls back to ~/.local/share/...)
  *   - "stderr" → stderr, for live local debugging
  *   - <path>   → an explicit log file path
  *
@@ -24,13 +24,25 @@ let cachedLogFile: string | null = null;
 let cachedLogRaw: string | undefined;
 let cachedLogDate: string | undefined;
 
+let projectSlug: string | null = null;
+
+/** Set the project slug for log identification. Called once during config hook. */
+export function setProjectContext(slug: string): void {
+  projectSlug = slug;
+}
+
+/** Reset project context. Used in tests. */
+export function resetProjectContext(): void {
+  projectSlug = null;
+}
+
 function resolveLogFile(): string | null {
   const raw = process.env.MEMOIR_LOG;
   if (raw === "stderr") return null;
   if (raw) return raw;
-  const stateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
+  const dataHome = process.env.XDG_DATA_HOME || join(homedir(), ".local", "share");
   const date = new Date().toISOString().slice(0, 10);
-  return join(stateHome, "opencode", `memoir-plugin-${date}.log`);
+  return join(dataHome, "opencode", "log", "memoir", `${date}.log`);
 }
 
 function getCachedLogFile(): string | null {
@@ -64,7 +76,8 @@ function formatArgs(args: unknown[]): string {
 
 function writeLog(args: unknown[]): void {
   const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
-  const line = `[memoir ${ts}] ${formatArgs(args)}\n`;
+  const slug = projectSlug ? `[${projectSlug}] ` : "";
+  const line = `[memoir ${ts}] ${slug}${formatArgs(args)}\n`;
   const logFilePath = getCachedLogFile();
   if (logFilePath) {
     try {

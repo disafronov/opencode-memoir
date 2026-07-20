@@ -89,45 +89,49 @@ export function resolveMemoirModel(opts: ModelResolution): string | undefined {
   return candidates.find((candidate) => candidate?.includes("/"));
 }
 
-/** Queue a visible subtask through OpenCode's supported promptAsync input API. */
+/**
+ * Dispatch a capture task on a throwaway session.
+ *
+ * Creates a temporary session (no parentID → invisible in the UI), then fires
+ * the memoir agent there via promptAsync. The LLM work runs asynchronously;
+ * promptAsync returns 204 immediately after forking.
+ */
 export async function runMemoirSubagent(
-  client: unknown,
-  parentSessionID: string,
+  sdkClient: unknown,
+  _parentSessionID: string,
   task: string,
+  _model?: string,
 ): Promise<void> {
-  type SubtaskPartInput = {
-    type: "subtask";
-    agent: string;
-    description: string;
-    prompt: string;
-    command?: string;
-  };
-  type PromptAsync = (options: {
+  type SessionCreate = (options: {
+    body?: { title?: string; agent?: string };
+  }) => Promise<{ data?: { id: string } }>;
+  type SessionPromptAsync = (options: {
     path: { id: string };
-    body: { parts: SubtaskPartInput[] };
+    body: { agent?: string; parts: Array<{ type: string; text: string }> };
   }) => Promise<unknown>;
 
-  const api = (client as { session?: { promptAsync?: PromptAsync } } | null | undefined)?.session;
-  if (!api?.promptAsync) {
-    throw new Error("client.session.promptAsync unavailable");
+  const sessionApi = (
+    sdkClient as
+      | { session?: { create?: SessionCreate; promptAsync?: SessionPromptAsync } }
+      | null
+      | undefined
+  )?.session;
+  if (!sessionApi?.create || !sessionApi?.promptAsync) {
+    throw new Error("SDK client session API unavailable");
   }
 
   try {
-    await api.promptAsync({
-      path: { id: parentSessionID },
-      body: {
-        parts: [
-          {
-            type: "subtask",
-            agent: MEMOIR_AGENT_NAME,
-            description: "capture",
-            prompt: task,
-            command: "",
-          },
-        ],
-      },
+    const createRes = await sessionApi.create({
+      body: { title: "capture", agent: MEMOIR_AGENT_NAME },
     });
-    log("memoir subtask accepted (session", parentSessionID, ", task", task.length, "chars)");
+    const throwawayID = createRes?.data?.id;
+    if (!throwawayID) throw new Error("Failed to create throwaway session");
+
+    await sessionApi.promptAsync({
+      path: { id: throwawayID },
+      body: { agent: MEMOIR_AGENT_NAME, parts: [{ type: "text", text: task }] },
+    });
+    log("memoir capture dispatched to throwaway session", throwawayID);
   } catch (e) {
     log("runMemoirSubagent failed", e);
     throw e;
