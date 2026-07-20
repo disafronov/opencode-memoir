@@ -21,12 +21,10 @@ const assistantMsg = (id: string, text: string): ChatMessage => ({
 type FakePromptAsyncInput = {
   path: { id: string };
   body: {
+    agent?: string;
     parts: Array<{
       type: string;
-      agent?: string;
-      prompt?: string;
-      description?: string;
-      command?: string;
+      text?: string;
     }>;
   };
 };
@@ -188,13 +186,8 @@ describe("captureTurn", () => {
     delete process.env.MEMOIR_AUTO_SAVE;
     process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
     try {
-      let prompted: { type?: string; agent?: string; prompt?: string; directory?: string } | null =
-        null as {
-          type?: string;
-          agent?: string;
-          prompt?: string;
-          directory?: string;
-        } | null;
+      let createdTitle: string | undefined;
+      let prompted: { agent?: string; text?: string } | null = null;
       const fakeClient = {
         session: {
           messages: async () => ({
@@ -203,30 +196,25 @@ describe("captureTurn", () => {
               assistantMsg("a1", "You set mcp.memoir in opencode.jsonc and reload."),
             ],
           }),
+          create: async (input: { body?: { title?: string; agent?: string } }) => {
+            createdTitle = input.body?.title;
+            return { data: { id: "throwaway-test" } };
+          },
           promptAsync: async (input: FakePromptAsyncInput) => {
-            // The plugin client is the v1 SDK client, whose promptAsync takes
-            // the { path, body } shape (NOT the flat v2 shape). A subagent is
-            // dispatched as a `subtask` part, not inline text.
             const part = input.body.parts[0];
             prompted = {
-              type: part.type,
-              agent: part.agent,
-              prompt: part.prompt,
-              directory: (input as { directory?: string }).directory,
+              agent: input.body.agent,
+              text: part.text,
             };
           },
         },
       };
       const seen = new Map<string, string>();
       await captureTurn(fakeClient, "sid", seen);
+      assert.ok(createdTitle, "session.create should have been called");
       assert.ok(prompted);
-      assert.equal(prompted?.type, "subtask");
       assert.equal(prompted?.agent, "memoir");
-      assert.match(prompted?.prompt ?? "", /How do I configure/);
-      // The v1 SDK client's promptAsync takes { path, body } with no
-      // `directory` field — the instance is already directory-bound. Assert
-      // directory is never sent.
-      assert.equal(prompted?.directory, undefined);
+      assert.match(prompted?.text ?? "", /How do I configure/);
 
       // deduped on the second call (same last assistant id)
       const again = new Map<string, string>(seen);
