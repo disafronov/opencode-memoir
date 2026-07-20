@@ -48,6 +48,7 @@ describe("MemoirOpenCode factory", () => {
               { info: { id: "a1", role: "assistant" }, parts: [{ type: "text", text: "hi" }] },
             ],
           }),
+          create: async () => ({ data: { id: "throwaway-1" } }),
           promptAsync: async () => {
             prompts++;
           },
@@ -85,6 +86,7 @@ describe("MemoirOpenCode factory", () => {
               { info: { id: "a1", role: "assistant" }, parts: [{ type: "text", text: "hi" }] },
             ],
           }),
+          create: async () => ({ data: { id: "throwaway-1" } }),
           promptAsync: () => accepted,
         },
       };
@@ -115,6 +117,7 @@ describe("MemoirOpenCode factory", () => {
     const client = {
       session: {
         messages: async () => ({ data: [] }),
+        create: async () => ({ data: { id: "throwaway-1" } }),
         promptAsync: async () => {
           prompts++;
         },
@@ -132,111 +135,6 @@ describe("MemoirOpenCode factory", () => {
     await new Promise((resolve) => setImmediate(resolve));
     assert.strictEqual(prompts, 0);
     await hooks.dispose();
-  });
-
-  it("marks only memoir tasks as native background jobs when enabled", async () => {
-    const previous = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-    process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "true";
-    try {
-      const hooks = await plugin.server(undefined, {});
-      const memoir = { args: { subagent_type: "memoir" } };
-      await hooks["tool.execute.before"]({ tool: "task" }, memoir);
-      assert.strictEqual(memoir.args.background, true);
-
-      const other = { args: { subagent_type: "general" } };
-      await hooks["tool.execute.before"]({ tool: "task" }, other);
-      assert.strictEqual("background" in other.args, false);
-    } finally {
-      if (previous === undefined) delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previous;
-    }
-  });
-
-  it("mirrors OpenCode's umbrella experimental flag and explicit override", async () => {
-    const previousBackground = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-    const previousExperimental = process.env.OPENCODE_EXPERIMENTAL;
-    process.env.OPENCODE_EXPERIMENTAL = "true";
-    delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-    try {
-      const hooks = await plugin.server(undefined, {});
-      const umbrella = { args: { subagent_type: "memoir" } };
-      await hooks["tool.execute.before"]({ tool: "task" }, umbrella);
-      assert.strictEqual(umbrella.args.background, true);
-
-      process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "false";
-      const overridden = { args: { subagent_type: "memoir" } };
-      await hooks["tool.execute.before"]({ tool: "task" }, overridden);
-      assert.strictEqual("background" in overridden.args, false);
-      await hooks.dispose();
-    } finally {
-      if (previousBackground === undefined)
-        delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previousBackground;
-      if (previousExperimental === undefined) delete process.env.OPENCODE_EXPERIMENTAL;
-      else process.env.OPENCODE_EXPERIMENTAL = previousExperimental;
-    }
-  });
-
-  it("tracks foreground memoir tasks through tool.execute.after", async () => {
-    const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
-    const args = { subagent_type: "memoir" };
-    await hooks["tool.execute.before"]({ tool: "task", callID: "call-fg" }, { args });
-    await hooks["tool.execute.after"]({ tool: "task", callID: "call-fg", args }, {});
-    await hooks.dispose();
-  });
-
-  it("tracks background memoir tasks until the child session becomes idle", async () => {
-    const previous = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-    process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "true";
-    try {
-      const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
-      const args = { subagent_type: "memoir" };
-      await hooks["tool.execute.before"]({ tool: "task", callID: "call-bg" }, { args });
-      await hooks["tool.execute.after"](
-        { tool: "task", callID: "call-bg", args },
-        { metadata: { background: true, sessionId: "child-bg" } },
-      );
-      await hooks.event({
-        event: { type: "session.idle", properties: { sessionID: "child-bg" } },
-      });
-      await hooks.dispose();
-    } finally {
-      if (previous === undefined) delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previous;
-    }
-  });
-
-  it("finishes a known background memoir task when its child errors", async () => {
-    const hooks = await plugin.server({ client: {}, directory: "/tmp" } as never, {});
-    const args = { subagent_type: "memoir" };
-    await hooks["tool.execute.before"]({ tool: "task", callID: "call-error" }, { args });
-    await hooks["tool.execute.after"](
-      { tool: "task", callID: "call-error", args },
-      { metadata: { background: true, sessionId: "child-error" } },
-    );
-    await hooks.event({
-      event: { type: "session.error", properties: { sessionID: "child-error" } },
-    });
-    await hooks.dispose();
-  });
-
-  it("leaves memoir tasks foreground when native background jobs are disabled", async () => {
-    const previousBackground = process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-    const previousExperimental = process.env.OPENCODE_EXPERIMENTAL;
-    delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-    delete process.env.OPENCODE_EXPERIMENTAL;
-    try {
-      const hooks = await plugin.server(undefined, {});
-      const output = { args: { subagent_type: "memoir" } };
-      await hooks["tool.execute.before"]({ tool: "task" }, output);
-      assert.strictEqual("background" in output.args, false);
-    } finally {
-      if (previousBackground === undefined)
-        delete process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS;
-      else process.env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = previousBackground;
-      if (previousExperimental === undefined) delete process.env.OPENCODE_EXPERIMENTAL;
-      else process.env.OPENCODE_EXPERIMENTAL = previousExperimental;
-    }
   });
 
   it("returns dispose hook", async () => {
@@ -353,8 +251,11 @@ describe("MemoirOpenCode factory", () => {
               { info: { id: "a1", role: "assistant" }, parts: [{ type: "text", text: "saved" }] },
             ],
           }),
-          promptAsync: async (input: { body: { parts: Array<{ prompt: string }> } }) => {
-            capturePrompts.push(input.body.parts[0].prompt);
+          create: async () => ({ data: { id: "throwaway-capture" } }),
+          promptAsync: async (input: {
+            body: { parts: Array<{ type: string; text: string }> };
+          }) => {
+            capturePrompts.push(input.body.parts[0].text);
           },
         },
       };
@@ -378,9 +279,6 @@ describe("MemoirOpenCode factory", () => {
       }
 
       await hooks.dispose();
-      assert.ok(calls.some((call) => call.name === "memoir_remember"));
-      // The task prompt is now just the raw transcript; all instructions
-      // live in the subagent's system prompt.
       assert.ok(
         capturePrompts.some((prompt) => prompt.includes("USER") && prompt.includes("saved")),
       );

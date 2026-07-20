@@ -114,6 +114,7 @@ describe("buildMemoirAgent", () => {
 describe("runMemoirSubagent logging", () => {
   const failingClient = {
     session: {
+      create: async () => ({ data: { id: "throwaway-1" } }),
       promptAsync: async () => {
         throw new Error("prompt submission detail");
       },
