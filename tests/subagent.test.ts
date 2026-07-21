@@ -108,6 +108,7 @@ describe("buildMemoirAgent", () => {
       MEMOIR_CHECKOUT_TOOL,
     ]);
     assert.equal(agent.temperature, 0);
+    assert.strictEqual(agent.hidden, true);
   });
 });
 
