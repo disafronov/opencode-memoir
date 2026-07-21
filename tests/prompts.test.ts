@@ -8,11 +8,10 @@ describe("loadPrompt", () => {
     const text = loadPrompt("subagent-system.tmpl");
     assert.match(text, /# WHO YOU ARE/);
     assert.match(text, /# WHAT TO DO/);
-    assert.match(text, /# WHAT NOT TO DO/);
-    assert.match(text, /NEVER OUTPUT ANY TEXT/);
-    assert.match(text, /NEVER RETURN A RESPONSE/);
+    assert.match(text, /## CONTEXT/);
+    assert.match(text, /dedicated background session/);
+    assert.match(text, /user never sees/);
     assert.match(text, /NEVER switch the memoir branch/);
-    assert.match(text, /!!!$/m);
   });
 
   it("returns the same cached string reference on repeated calls", () => {
