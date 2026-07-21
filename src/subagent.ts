@@ -45,6 +45,7 @@ const MEMOIR_AGENT_PROMPT = loadPrompt("subagent-system.tmpl");
 export function buildMemoirAgent(model?: string): MemoirAgentSpec {
   const agent: MemoirAgentSpec = {
     mode: "subagent",
+    hidden: true,
     description:
       "Memoir memory agent — captures durable facts and recalls prior context via the memoir MCP server.",
     prompt: MEMOIR_AGENT_PROMPT,
