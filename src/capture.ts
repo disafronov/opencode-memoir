@@ -156,6 +156,7 @@ export async function captureTurn(
   sessionID: string,
   lastCaptured: Map<string, string>,
   model?: string,
+  onSessionCreated?: (sessionID: string) => (() => void) | undefined,
 ): Promise<void> {
   if (!autoSaveEnabled()) {
     log("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
@@ -194,7 +195,7 @@ export async function captureTurn(
     }
 
     log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
-    await runMemoirSubagent(client, sessionID, transcript, model);
+    await runMemoirSubagent(client, sessionID, transcript, model, onSessionCreated);
     lastCaptured.set(sessionID, turnId);
   } catch (e) {
     log("captureTurn failed", e);

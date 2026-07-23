@@ -124,7 +124,13 @@ describe("runMemoirSubagent logging", () => {
 
   it("writes concise submission errors to normal lifecycle logs", async () => {
     const file = useTempLog();
-    await assert.rejects(runMemoirSubagent(failingClient, "sid", "task"));
+    let rolledBack = false;
+    await assert.rejects(
+      runMemoirSubagent(failingClient, "sid", "task", undefined, () => () => {
+        rolledBack = true;
+      }),
+    );
+    assert.strictEqual(rolledBack, true);
     const written = readFileSync(file, "utf8");
     assert.match(written, /runMemoirSubagent failed: prompt submission detail/);
     assert.doesNotMatch(written, /subagent\.test\.ts/);

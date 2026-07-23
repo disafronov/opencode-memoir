@@ -40,6 +40,7 @@ describe("MemoirOpenCode factory", () => {
     const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
     try {
       let prompts = 0;
+      const deleted: string[] = [];
       const client = {
         session: {
           messages: async () => ({
@@ -52,6 +53,9 @@ describe("MemoirOpenCode factory", () => {
           promptAsync: async () => {
             prompts++;
           },
+          delete: async (input: { path: { id: string } }) => {
+            deleted.push(input.path.id);
+          },
         },
       };
       const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
@@ -61,6 +65,11 @@ describe("MemoirOpenCode factory", () => {
       );
       await new Promise((resolve) => setImmediate(resolve));
       assert.strictEqual(prompts, 1);
+      await hooks.event({
+        event: { type: "session.idle", properties: { sessionID: "throwaway-1" } },
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(deleted, ["throwaway-1"]);
       await hooks.dispose();
     } finally {
       connect.mock.restore();
@@ -69,7 +78,7 @@ describe("MemoirOpenCode factory", () => {
     }
   });
 
-  it("waits for promptAsync acceptance but not subagent execution", async () => {
+  it("returns before promptAsync acceptance and drains capture on dispose", async () => {
     const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
     process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
     const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
@@ -100,11 +109,73 @@ describe("MemoirOpenCode factory", () => {
       });
 
       await new Promise((resolve) => setImmediate(resolve));
-      assert.strictEqual(finished, false);
+      assert.strictEqual(finished, true);
       acceptPrompt();
       await hookRun;
-      assert.strictEqual(finished, true);
+      await new Promise((resolve) => setImmediate(resolve));
+      await hooks.event({
+        event: { type: "session.idle", properties: { sessionID: "throwaway-1" } },
+      });
       await hooks.dispose();
+    } finally {
+      connect.mock.restore();
+      if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
+      else process.env.MEMOIR_CAPTURE_MIN_CHARS = previousMin;
+    }
+  });
+
+  it("queues repeated capture triggers for the same session", async () => {
+    const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
+    process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
+    try {
+      let releaseFirst!: () => void;
+      const firstAccepted = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let messageReads = 0;
+      let prompts = 0;
+      const client = {
+        session: {
+          messages: async () => {
+            messageReads++;
+            const id = String(messageReads);
+            return {
+              data: [
+                { info: { id: `u${id}`, role: "user" }, parts: [{ type: "text", text: "hello" }] },
+                {
+                  info: { id: `a${id}`, role: "assistant" },
+                  parts: [{ type: "text", text: `reply ${id}` }],
+                },
+              ],
+            };
+          },
+          create: async () => ({ data: { id: `throwaway-${prompts + 1}` } }),
+          promptAsync: async () => {
+            prompts++;
+            if (prompts === 1) await firstAccepted;
+          },
+        },
+      };
+      const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
+
+      await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
+      await new Promise((resolve) => setImmediate(resolve));
+      await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.strictEqual(prompts, 1);
+      releaseFirst();
+      while (prompts < 2) await new Promise((resolve) => setImmediate(resolve));
+      await hooks.event({
+        event: { type: "session.idle", properties: { sessionID: "throwaway-1" } },
+      });
+      await hooks.event({
+        event: { type: "session.error", properties: { sessionID: "throwaway-2" } },
+      });
+      await hooks.dispose();
+      assert.strictEqual(prompts, 2);
+      assert.strictEqual(messageReads, 2);
     } finally {
       connect.mock.restore();
       if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;
@@ -282,6 +353,12 @@ describe("MemoirOpenCode factory", () => {
         );
       }
 
+      while (capturePrompts.length === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      await hooks.event({
+        event: { type: "session.idle", properties: { sessionID: "throwaway-capture" } },
+      });
       await hooks.dispose();
       assert.ok(
         capturePrompts.some((prompt) => prompt.includes("USER") && prompt.includes("saved")),
