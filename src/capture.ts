@@ -16,6 +16,11 @@ export interface ChatMessage {
   parts?: ChatPart[];
 }
 
+export type CaptureSnapshot = {
+  turnId: string;
+  transcript: string | null;
+};
+
 // Minimal structural view of the SDK client we use to pull a session transcript.
 // The SDK exposes this as `client.session.messages` (singular `session`).
 type SessionMessagesClient = {
@@ -139,18 +144,68 @@ function lastAssistantMessageId(messages: ChatMessage[]): string | null {
   return null;
 }
 
-/**
- * Capture the latest completed turn of a session into memoir via the subagent.
- *
- * Fire-and-forget: the caller should NOT await the subagent's completion.
- * Deduped per session by the last assistant message id, so a turn is written
- * at most once. Skips entirely when MEMOIR_AUTO_SAVE=0.
- *
- * @param client   SDK client (transcript source + subagent spawner)
- * @param sessionID parent session id
- * @param lastCaptured per-session map of already-captured assistant ids
- * @param model optional model override for the memoir subagent
- */
+/** Read and freeze the latest completed turn before dispatch serialization. */
+export async function prepareCaptureTurn(
+  client: unknown,
+  sessionID: string,
+): Promise<CaptureSnapshot | null> {
+  if (!autoSaveEnabled()) {
+    log("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
+    return null;
+  }
+  log("captureTurn: started for session", sessionID);
+
+  const api = (client as SessionMessagesClient | null | undefined)?.session;
+  if (!api?.messages) {
+    log("captureTurn: client.session.messages unavailable");
+    log("captureTurn: skipped — session messages API unavailable");
+    return null;
+  }
+
+  const res = await api.messages({
+    path: { id: sessionID },
+    query: { limit: 50 },
+  });
+  const raw = res.data;
+  const messages: ChatMessage[] = Array.isArray(raw) ? (raw as ChatMessage[]) : [];
+  if (messages.length === 0) return null;
+
+  const turnId = lastAssistantMessageId(messages);
+  if (!turnId) return null;
+
+  const transcript = lastTurnTranscript(messages);
+  if (!shouldCaptureTurn(transcript)) {
+    log("captureTurn: skipped — transcript below min-chars");
+    return { turnId, transcript: null };
+  }
+
+  return { turnId, transcript };
+}
+
+/** Dispatch one immutable turn snapshot, deduped by assistant message id. */
+export async function dispatchCaptureSnapshot(
+  client: unknown,
+  sessionID: string,
+  snapshot: CaptureSnapshot,
+  lastCaptured: Map<string, string>,
+  model?: string,
+  onSessionCreated?: (sessionID: string) => (() => void) | undefined,
+): Promise<void> {
+  if (lastCaptured.get(sessionID) === snapshot.turnId) {
+    log("captureTurn: skipped — already captured this turn");
+    return;
+  }
+  if (snapshot.transcript === null) {
+    lastCaptured.set(sessionID, snapshot.turnId);
+    return;
+  }
+
+  log("captureTurn: submitting memoir subtask (transcript", snapshot.transcript.length, "chars)");
+  await runMemoirSubagent(client, sessionID, snapshot.transcript, model, onSessionCreated);
+  lastCaptured.set(sessionID, snapshot.turnId);
+}
+
+/** Prepare and dispatch one completed turn; retained as the public convenience API. */
 export async function captureTurn(
   client: unknown,
   sessionID: string,
@@ -158,45 +213,17 @@ export async function captureTurn(
   model?: string,
   onSessionCreated?: (sessionID: string) => (() => void) | undefined,
 ): Promise<void> {
-  if (!autoSaveEnabled()) {
-    log("captureTurn: MEMOIR_AUTO_SAVE=0, skipping");
-    return;
-  }
-  log("captureTurn: started for session", sessionID);
-
   try {
-    const api = (client as SessionMessagesClient | null | undefined)?.session;
-    if (!api?.messages) {
-      log("captureTurn: client.session.messages unavailable");
-      log("captureTurn: skipped — session messages API unavailable");
-      return;
-    }
-
-    const res = await api.messages({
-      path: { id: sessionID },
-      query: { limit: 50 },
-    });
-    const raw = res.data;
-    const messages: ChatMessage[] = Array.isArray(raw) ? (raw as ChatMessage[]) : [];
-    if (messages.length === 0) return;
-
-    const turnId = lastAssistantMessageId(messages);
-    if (!turnId) return;
-    if (lastCaptured.get(sessionID) === turnId) {
-      log("captureTurn: skipped — already captured this turn");
-      return;
-    }
-
-    const transcript = lastTurnTranscript(messages);
-    if (!shouldCaptureTurn(transcript)) {
-      log("captureTurn: skipped — transcript below min-chars");
-      lastCaptured.set(sessionID, turnId);
-      return;
-    }
-
-    log("captureTurn: submitting memoir subtask (transcript", transcript.length, "chars)");
-    await runMemoirSubagent(client, sessionID, transcript, model, onSessionCreated);
-    lastCaptured.set(sessionID, turnId);
+    const snapshot = await prepareCaptureTurn(client, sessionID);
+    if (!snapshot) return;
+    await dispatchCaptureSnapshot(
+      client,
+      sessionID,
+      snapshot,
+      lastCaptured,
+      model,
+      onSessionCreated,
+    );
   } catch (e) {
     log("captureTurn failed", e);
   }

@@ -32,8 +32,9 @@ OpenCode downloads and resolves the package from npm automatically. To pin a ver
 
 Automatic capture works without additional OpenCode flags. By default, capture
 runs in a hidden throwaway session with no parent session, so it does not add a
-subtask or response to the active conversation. Capture dispatch is queued per
-parent session and does not block the `chat.message` hook.
+subtask or response to the active conversation. Each completed turn is
+snapshotted immediately; capture dispatch is then queued per parent session and
+does not block the `chat.message` hook.
 
 ## Store configuration
 
@@ -81,15 +82,16 @@ subagent cannot move the shared store. Every non-Memoir tool remains denied.
 The capture task includes the live MCP tool names and descriptions so a small
 local model does not have to infer the catalog.
 
-On each real `chat.message`, the plugin queues the previous completed turn: the
-incoming user message has not entered the transcript yet. The queue is
-serialized per parent session, while branch matching remains serialized for the
-shared store. A hidden throwaway session is then created without a `parentID`
-and submitted through `promptAsync`. The hook itself does not wait for that
-submission, and the subagent is instructed to store memories without emitting a
-response. Terminal session events remove completed throwaway sessions. During
-shutdown, `dispose` waits for queued submissions and active capture sessions
-before closing the owned MCP process.
+On each real `chat.message`, the plugin immediately snapshots the previous
+completed turn: the incoming user message has not entered the transcript yet.
+Only dispatch is serialized per parent session, so a delayed earlier submission
+cannot make a later turn disappear from the queue. Branch matching remains
+serialized for the shared store. A hidden throwaway session is then created
+without a `parentID` and submitted through `promptAsync`. The hook itself does
+not wait for that submission, and the subagent is instructed to store memories
+without emitting a response. Terminal session events remove completed
+throwaway sessions. During shutdown, `dispose` waits for queued submissions and
+active capture sessions before closing the owned MCP process.
 
 ## Development
 
