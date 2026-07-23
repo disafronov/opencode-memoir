@@ -31,22 +31,9 @@ OpenCode downloads and resolves the package from npm automatically. To pin a ver
 2. Start coding — the agent can use `memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get` MCP tools automatically
 
 Automatic capture works without additional OpenCode flags. By default, capture
-runs through the regular foreground subagent path for compatibility with older
-OpenCode installations.
-
-To run capture as a native background task, enable OpenCode's experimental
-background-subagent support before starting OpenCode:
-
-```bash
-OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true opencode
-```
-
-With this flag, capture no longer blocks the parent session while the memoir
-subagent extracts and stores durable facts.
-
-OpenCode's umbrella `OPENCODE_EXPERIMENTAL=true` also enables background
-subagents unless `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=false` explicitly
-overrides it. The plugin mirrors that precedence.
+runs in a hidden throwaway session with no parent session, so it does not add a
+subtask or response to the active conversation. Capture dispatch is queued per
+parent session and does not block the `chat.message` hook.
 
 ## Store configuration
 
@@ -68,11 +55,10 @@ All optional:
 | --- | --- |
 | `MEMOIR_STORE` | Override store path (passed to memoir-mcp as `--store`) |
 | `MEMOIR_DEBUG=1` | Add verbose diagnostics and error stacks to the configured Memoir log; without it, normal lifecycle and concise error messages are still logged |
-| `MEMOIR_LOG` | Log destination: unset uses `$XDG_STATE_HOME/opencode/memoir-plugin-YYYY-MM-DD.log`; `stderr` enables live stderr; any other value is an explicit file path |
-| `MEMOIR_AUTO_SAVE` | **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it. Separate from that, persisting per-session markers at `dispose` only happens when this is set **explicitly to `1`** — by default the dispose-time markers are not written. |
+| `MEMOIR_LOG` | Log destination: unset uses `$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log`; `stderr` enables live stderr; any other value is an explicit file path |
+| `MEMOIR_AUTO_SAVE` | **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it |
 | `MEMOIR_AGENT_MODEL` | Model for the `memoir` subagent, as `provider/model`. Falls back to `small_model` → `model` → openCode default |
 | `MEMOIR_CAPTURE_MIN_CHARS` | Local pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything) |
-| `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` | Optional OpenCode feature flag. Runs capture as a native background job; explicit `false` overrides the umbrella experimental flag |
 
 ## Hooks
 
@@ -80,25 +66,30 @@ All optional:
 | --- | --- |
 | `config` | Registers the `memoir` subagent, one project-scoped `memoir-mcp` remote MCP server, and the `/memoir:onboard` slash command |
 | `shell.env` | Injects `MEMOIR_STORE` into shell environment |
-| `chat.message` | Captures the previous completed turn, tracks real parent messages, and auto-matches the memoir branch; waits for `promptAsync` to accept the visible capture task while ignoring synthetic and memoir-child messages |
-| `tool.execute.before` | Marks memoir's `task` invocation with `background: true` when OpenCode background subagents are enabled |
-| `tool.execute.after` + `event` | Tracks foreground completion and known background child idle/error events so checkout does not overlap an active capture |
-| `dispose` | Saves session markers when `MEMOIR_AUTO_SAVE=1` is explicit, closes the project MCP process, and clears instance state |
+| `chat.message` | Queues capture of the previous completed turn, auto-matches the memoir branch, and returns without waiting for `promptAsync`; ignores synthetic and memoir-child messages |
+| `event` | Completes and deletes hidden capture sessions when they become idle or fail |
+| `dispose` | Drains queued and active captures, closes the project MCP process, and clears instance state |
 
 ## How it works
 
 Instead of wrapping the `memoir` CLI and re-implementing tools in TypeScript, this plugin registers `memoir-mcp` as a **remote** MCP server — one HTTP process per plugin/project instance. All memoir tools (`memoir_memoir_recall`, `memoir_memoir_remember`, `memoir_memoir_get`, etc.) are available natively to the main LLM.
 
-Capturing is done by a dedicated visible, collapsible `memoir` subagent. It can use the dynamic `memoir_*` tool namespace except for the store-global `memoir_memoir_checkout`; branch checkout remains owned by the plugin so a subagent cannot move the shared store. Every non-Memoir tool remains denied. The capture task includes the live MCP tool names and descriptions so a small local model does not have to infer the catalog. Deterministic settings keep it suitable for that model. On each real `chat.message`, the plugin captures the previous completed turn: the incoming user message has not entered the transcript yet. This one-turn delay prevents capture activity from triggering another capture. Capture is submitted as a supported `SubtaskPartInput` through `promptAsync`; the hook waits for OpenCode's immediate `204 No Content` acceptance, not for subagent execution. When native background subagents are enabled, `tool.execute.before` adds `background: true` before `TaskTool.execute` starts the child.
+Capturing is done by the dedicated hidden `memoir` subagent. It can use the
+dynamic `memoir_*` tool namespace except for the store-global
+`memoir_memoir_checkout`; branch checkout remains owned by the plugin so a
+subagent cannot move the shared store. Every non-Memoir tool remains denied.
+The capture task includes the live MCP tool names and descriptions so a small
+local model does not have to infer the catalog.
 
-The subagent is instructed to finish with a compact report of confirmed writes (`Captured N memories`, taxonomy paths, and brief reasons), or a single reason why nothing was captured. OpenCode returns that report to the parent agent through the normal task result. The prompt requires the report to reflect actual tool outcomes rather than intended writes.
-
-After each real parent-session message, every model call in that turn receives a compact status from `memoir_status`, such as `[memoir] fix6 · memory available (31 memories)`. Synthetic notifications and memoir child activity do not update it, and the status does not instruct the model to perform recall.
-
-- With `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`, the plugin adds `background: true` in `tool.execute.before`. OpenCode runs the child through its native `BackgroundJob` path and immediately releases the parent session.
-- `OPENCODE_EXPERIMENTAL=true` has the same effect unless the dedicated background-subagent flag is explicitly false, matching OpenCode's native precedence.
-- Without either enabling flag, the plugin does not add `background`; OpenCode runs the same capture task through the original foreground subagent path. Memory capture remains available, but the parent session may wait for it to finish.
-- Before changing the shared memoir branch, the plugin waits for active foreground tasks (`tool.execute.after`) and native background tasks (the known child session's terminal idle/error event). A timeout defers checkout instead of moving the store underneath a running capture.
+On each real `chat.message`, the plugin queues the previous completed turn: the
+incoming user message has not entered the transcript yet. The queue is
+serialized per parent session, while branch matching remains serialized for the
+shared store. A hidden throwaway session is then created without a `parentID`
+and submitted through `promptAsync`. The hook itself does not wait for that
+submission, and the subagent is instructed to store memories without emitting a
+response. Terminal session events remove completed throwaway sessions. During
+shutdown, `dispose` waits for queued submissions and active capture sessions
+before closing the owned MCP process.
 
 ## Development
 
@@ -119,14 +110,13 @@ npm test         # run the test suite
 
 | File | Responsibility |
 | --- | --- |
-| `src/index.ts` | Plugin entry: MCP registration + all hooks + dispose |
+| `src/index.ts` | Plugin entry: async branch matching, MCP registration, capture queues, hooks, and dispose |
 | `src/mcp-client.ts` | Project-scoped MCP process/client lifecycle and tool calls |
 | `src/capture.ts` | Transcript extraction, filtering, task construction, and capture dispatch |
-| `src/capture-lifecycle.ts` | Foreground/background capture tracking and checkout drain |
 | `src/subagent.ts` | Subagent permissions, model selection, and OpenCode task dispatch |
-| `src/store.ts` | Store path derivation and serialized store-branch matching |
 | `src/path.ts` | Symlink-safe project and store path helpers |
 | `src/prompts.ts` | Cached prompt-template loader |
+| `src/status.ts` | Decoder for `memoir_status` responses used by branch matching |
 | `src/debug.ts` | File/stderr lifecycle and debug logger |
 
 ## Publishing

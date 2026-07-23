@@ -37,10 +37,9 @@ const MEMOIR_AGENT_PROMPT = loadPrompt("subagent-system.tmpl");
  * never touch the filesystem, shell, network, or the store-global branch.
  * opencode restricts an agent's tools through its `permission` ruleset — see
  * MemoirAgentSpec for why the checkout deny must follow the broad allow. Mode
- * "subagent" makes
- * opencode spawn it as a detached child session, rendered as a collapsed task
- * (visible in the parent timeline) when prompted via
- * client.session.prompt({ body: { agent: "memoir" } }).
+ * "subagent" gives the throwaway session the restricted agent configuration;
+ * `hidden: true` and the absence of a parentID keep capture out of the active
+ * conversation.
  */
 export function buildMemoirAgent(model?: string): MemoirAgentSpec {
   const agent: MemoirAgentSpec = {
@@ -102,7 +101,8 @@ export async function runMemoirSubagent(
   _parentSessionID: string,
   task: string,
   _model?: string,
-): Promise<void> {
+  onSessionCreated?: (sessionID: string) => (() => void) | undefined,
+): Promise<string> {
   type SessionCreate = (options: {
     body?: { title?: string; agent?: string };
   }) => Promise<{ data?: { id: string } }>;
@@ -127,12 +127,19 @@ export async function runMemoirSubagent(
     });
     const throwawayID = createRes?.data?.id;
     if (!throwawayID) throw new Error("Failed to create throwaway session");
+    const rollback = onSessionCreated?.(throwawayID);
 
-    await sessionApi.promptAsync({
-      path: { id: throwawayID },
-      body: { agent: MEMOIR_AGENT_NAME, parts: [{ type: "text", text: task }] },
-    });
+    try {
+      await sessionApi.promptAsync({
+        path: { id: throwawayID },
+        body: { agent: MEMOIR_AGENT_NAME, parts: [{ type: "text", text: task }] },
+      });
+    } catch (e) {
+      rollback?.();
+      throw e;
+    }
     log("memoir capture dispatched to throwaway session", throwawayID);
+    return throwawayID;
   } catch (e) {
     log("runMemoirSubagent failed", e);
     throw e;

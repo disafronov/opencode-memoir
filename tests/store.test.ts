@@ -52,7 +52,7 @@ describe("deriveStorePath", () => {
 describe("currentGitBranch", () => {
   it("returns empty string when not in a git repo", async () => {
     const mod = await import("../src/index.ts");
-    assert.strictEqual(mod.currentGitBranch("/nonexistent-path"), "");
+    assert.strictEqual(await mod.currentGitBranch("/nonexistent-path"), "");
   });
 });
 
@@ -102,7 +102,7 @@ describe("MemoirBranchMatcher", () => {
 
   it("reads the actual store branch on every match", async () => {
     const cwd = createGitRepo();
-    const codeBranch = currentGitBranch(cwd);
+    const codeBranch = await currentGitBranch(cwd);
     const calls: string[] = [];
     const client = {
       callTool: async (input: { name: string }) => {
@@ -118,7 +118,7 @@ describe("MemoirBranchMatcher", () => {
 
   it("drains active captures before checkout and rechecks the branch", async () => {
     const cwd = createGitRepo();
-    const codeBranch = currentGitBranch(cwd);
+    const codeBranch = await currentGitBranch(cwd);
     const order: string[] = [];
     let current = "other";
     const client = {

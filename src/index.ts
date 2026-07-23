@@ -1,5 +1,6 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { basename } from "node:path";
+import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Config, Plugin, PluginInput, PluginModule } from "@opencode-ai/plugin";
 import type { AgentConfig } from "@opencode-ai/sdk";
@@ -11,15 +12,17 @@ import { loadPrompt } from "./prompts.js";
 import { parseMemoirStatus } from "./status.js";
 import { buildMemoirAgent, MEMOIR_AGENT_NAME, resolveMemoirModel } from "./subagent.js";
 
-/** Get current git branch (empty string if not in a git repo). */
-export function currentGitBranch(cwd = process.cwd()): string {
+const execFileAsync = promisify(execFile);
+
+/** Get current git branch without blocking the OpenCode event loop. */
+export async function currentGitBranch(cwd = process.cwd()): Promise<string> {
   try {
-    return execFileSync("git", ["branch", "--show-current"], {
+    const { stdout } = await execFileAsync("git", ["branch", "--show-current"], {
       cwd: safeRealpath(cwd),
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
       timeout: 3_000,
-    }).trim();
+    });
+    return stdout.trim();
   } catch {
     return "";
   }
@@ -49,7 +52,7 @@ export class MemoirBranchMatcher {
     cwd: string,
     drain?: () => Promise<boolean>,
   ): Promise<void> {
-    const codeBranch = currentGitBranch(cwd);
+    const codeBranch = await currentGitBranch(cwd);
     if (!codeBranch) return;
 
     if ((await this.currentBranch(client)) === codeBranch) return;
@@ -89,7 +92,9 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const runtime = new MemoirRuntime(mcpCommand, environment, directory);
   const branchMatcher = new MemoirBranchMatcher();
   const lastCaptured = new Map<string, string>();
-  const capturePending = new Set<string>();
+  const captureQueues = new Map<string, Promise<void>>();
+  const activeCaptures = new Map<string, { done: Promise<void>; resolve: () => void }>();
+  let disposing = false;
   let agentModel: string | undefined;
 
   // The plugin owns a single shared memoir-mcp HTTP server (started in the
@@ -110,16 +115,71 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
     }
   };
 
-  const dispatchCapture = async (sid: string): Promise<void> => {
-    if (!sdkClient || capturePending.has(sid)) return;
-    capturePending.add(sid);
-    try {
-      await captureTurn(sdkClient, sid, lastCaptured, agentModel);
-    } catch (e) {
-      log("dispatchCapture failed", e);
-    } finally {
-      capturePending.delete(sid);
+  const trackCapture = (sessionID: string): (() => void) | undefined => {
+    if (activeCaptures.has(sessionID)) return undefined;
+    let resolve!: () => void;
+    const done = new Promise<void>((doneResolve) => {
+      resolve = doneResolve;
+    });
+    activeCaptures.set(sessionID, { done, resolve });
+    return () => finishCapture(sessionID);
+  };
+
+  const finishCapture = (sessionID: string): void => {
+    const capture = activeCaptures.get(sessionID);
+    if (!capture) return;
+    activeCaptures.delete(sessionID);
+    capture.resolve();
+
+    const sessionApi = (
+      sdkClient as
+        | { session?: { delete?: (input: { path: { id: string } }) => Promise<unknown> } }
+        | null
+        | undefined
+    )?.session;
+    if (sessionApi?.delete) {
+      void sessionApi.delete({ path: { id: sessionID } }).catch((e: unknown) => {
+        log("failed to delete completed capture session", sessionID, e);
+      });
     }
+  };
+
+  const drainCaptures = async (timeoutMs = 10_000): Promise<boolean> => {
+    const pending = [...activeCaptures.values()].map((capture) => capture.done);
+    if (pending.length === 0) return true;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+    });
+    const drained = Promise.all(pending).then(() => true as const);
+    const result = await Promise.race([drained, timedOut]);
+    if (timer) clearTimeout(timer);
+    if (!result) log("capture drain timed out");
+    return result;
+  };
+
+  const dispatchCapture = (sid: string): void => {
+    if (!sdkClient || disposing) return;
+
+    const previous = captureQueues.get(sid) ?? Promise.resolve();
+    const current = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const client = await connectClient();
+        if (client) {
+          await branchMatcher.match(client, directory, drainCaptures);
+        }
+        await captureTurn(sdkClient, sid, lastCaptured, agentModel, trackCapture);
+      })
+      .catch((e: unknown) => {
+        log("dispatchCapture failed", e);
+      });
+
+    captureQueues.set(sid, current);
+    void current.then(() => {
+      if (captureQueues.get(sid) === current) captureQueues.delete(sid);
+    });
   };
 
   const hooks: Record<string, unknown> = {
@@ -198,19 +258,32 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
         const isSynthetic = parts.length > 0 && parts.every((part) => part.synthetic === true);
         if (input.agent === MEMOIR_AGENT_NAME || isMemoirSubtask || isSynthetic) return;
 
-        const client = await connectClient();
-        if (client) {
-          await branchMatcher.match(client, directory);
-        }
-
         log("chat.message: submitting capture for previous completed turn", sid);
-        await dispatchCapture(sid);
+        dispatchCapture(sid);
       } catch (e) {
         log("chat.message: failed", e);
       }
     },
 
+    event: async (input: {
+      event?: { type?: string; properties?: { sessionID?: string } };
+    }): Promise<void> => {
+      const event = input.event;
+      const sessionID = event?.properties?.sessionID;
+      if (
+        sessionID &&
+        (event.type === "session.idle" || event.type === "session.error") &&
+        activeCaptures.has(sessionID)
+      ) {
+        finishCapture(sessionID);
+      }
+    },
+
     dispose: async (): Promise<void> => {
+      disposing = true;
+      await Promise.all([...captureQueues.values()]);
+      await drainCaptures();
+      captureQueues.clear();
       branchMatcher.clear();
       lastCaptured.clear();
       await runtime.close();

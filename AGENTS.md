@@ -45,11 +45,10 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 | File | Lines | Role |
 | ------ | ------: | ------ |
-| `src/index.ts` | ~337 | Plugin entry: `currentGitBranch` + `MemoirBranchMatcher` (exported for tests), subagent + MCP registration, all hooks, capture wiring, dispose |
+| `src/index.ts` | ~240 | Plugin entry: async `currentGitBranch` + `MemoirBranchMatcher` (exported for tests), subagent + MCP registration, per-session capture queues, hooks, dispose |
 | `src/mcp-client.ts` | ~283 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + `callMemoirTool`; reconnectable lifecycle |
-| `src/subagent.ts` | ~135 | Visible, collapsible `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + supported `promptAsync` runner + model fallback resolution |
-| `src/capture.ts` | ~230 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, live tool-catalog injection, compact outcome reporting, dispatch retry, and dedup |
-| `src/capture-lifecycle.ts` | ~60 | Tracks foreground/background memoir tasks and blocks branch checkout until active captures finish |
+| `src/subagent.ts` | ~140 | Hidden `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + throwaway-session `promptAsync` runner + model fallback resolution |
+| `src/capture.ts` | ~200 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, hidden-session dispatch, and dedup |
 | `src/prompts.ts` | ~20 | Cached `.tmpl` loader. Capture task has `{{TOOLS_SECTION}}` and `{{TRANSCRIPT}}` placeholders; permissions independently enforce the `memoir_*` boundary |
 | `src/path.ts` | ~50 | Symlink-safe path helpers: `safeRealpath`, `slugify`, `deriveStorePath` (git-root/cwd → `~/.memoir/<slug>`) |
 | `src/status.ts` | ~30 | Shared `parseMemoirStatus` decoder for the `memoir_status` payload (used by `index.ts` branch matcher) |
@@ -59,11 +58,11 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 - **`config`** — Registers the `memoir` subagent (`memoir_*` allowed except store-global checkout, every non-Memoir tool denied), the `/memoir:onboard` slash command, and the project-scoped `memoir` remote MCP server
 - **`shell.env`** — Injects `MEMOIR_STORE` into shell environment
-- **`chat.message`** — Captures the previous completed turn with a deliberate one-turn delay, increments the counter, auto-matches the memoir branch, refreshes the compact model status, and waits for `promptAsync` to accept the visible task; ignores synthetic and memoir-child messages so capture cannot trigger itself
-- **`tool.execute.before` / `tool.execute.after` + `event`** — Tracks actual memoir task execution; foreground ends at `tool.execute.after`, background ends when its known child session becomes idle or errors
-- **`dispose`** — Saves session markers only when `MEMOIR_AUTO_SAVE=1` is explicit, closes the instance MCP process, and clears pending state
+- **`chat.message`** — Queues the previous completed turn with a deliberate one-turn delay, auto-matches the memoir branch inside the queue, and returns without waiting for capture submission; ignores synthetic and memoir-child messages so capture cannot trigger itself
+- **`event`** — Completes and deletes known hidden capture sessions on terminal idle/error events
+- **`dispose`** — Stops accepting new captures, drains queued submissions and active captures, closes the instance MCP process, and clears pending state
 
-Runtime hook failures are contained and logged. Capture uses OpenCode's supported `promptAsync` input and waits only for its immediate `204 No Content` acceptance; subagent execution remains foreground or native-background according to the OpenCode flags. Its child session is intentionally visible as a collapsed subagent in the parent timeline and writes through `memoir_remember`; by contract the subagent never emits any response — the correct outcome is the absence of any reply.
+Runtime hook failures are contained and logged. Capture creates a hidden throwaway session without a `parentID`, submits OpenCode's supported `promptAsync` input, and never blocks the active `chat.message` hook. Per-parent-session queues prevent overlapping submissions; terminal events release waiters and delete completed throwaway sessions. `dispose` waits for active capture completion with a bounded timeout before closing `memoir-mcp`. By contract the subagent never emits any response — the correct outcome is the absence of any reply.
 
 ## Environment Variables
 
@@ -72,31 +71,28 @@ All optional:
 - `MEMOIR_DEBUG=1` — Adds verbose diagnostics and passed `Error` stacks. Without it, normal lifecycle entries and concise error messages are still logged.
 - `MEMOIR_LOG` — Log destination: unset → `$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log` (daily rotation, alongside `opencode.log`); `stderr` → live stderr (local debugging); any other value → explicit file path. Each log line includes the project slug for multi-project identification.
 - `MEMOIR_STORE` — Override store path (passed as `--store` to `memoir-mcp`)
-- `MEMOIR_AUTO_SAVE` — **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it. Separate from that, persisting per-session markers at `dispose` only happens when this is set **explicitly to `1`** — by default the dispose-time markers are not written.
+- `MEMOIR_AUTO_SAVE` — **Turn capture** (the previous completed turn is saved when the next real user message arrives) is **enabled by default**; set `=0` to disable it.
 - `MEMOIR_AGENT_MODEL` — Model for the `memoir` subagent, as `provider/model`. Overrides config. Falls back to `config.small_model` → `config.model` → openCode default
 - `MEMOIR_CAPTURE_MIN_CHARS` — Local, LLM-free pre-filter; only transcripts at least this long are captured (default: 16, `0` = capture everything)
-- `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` — Dedicated native-background flag. If unset, OpenCode and the plugin fall back to `OPENCODE_EXPERIMENTAL`; explicit `false` overrides the umbrella flag
 
 ## Tests
 
-9 test files, 86 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_STATE_HOME/opencode/memoir-plugin-*.log`).
+7 test files, 70 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log`).
 
 | File | Tests | What it covers |
 | ------ | ------: | ---------------- |
 | `tests/store.test.ts` | 13 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
 | `tests/subagent.test.ts` | 10 | Model fallback isolation, dynamic Memoir-namespace permissions, and debug-only submission error details |
-| `tests/capture.test.ts` | 18 | Transcript extraction, filtering, malformed APIs, live tool prompt, dispatch retry, and dedup |
-| `tests/capture-lifecycle.test.ts` | 3 | Foreground/background task tracking, drain completion, and timeout behavior |
-| `tests/index.test.ts` | 23 | Module shape, hook behavior, prompt acceptance ordering, background flag parity, connected recall/status/session-marker flow, self-trigger filtering, and graceful degradation |
+| `tests/capture.test.ts` | 13 | Transcript extraction, filtering, malformed APIs, dispatch, and dedup |
+| `tests/index.test.ts` | 17 | Module shape, hook behavior, non-blocking capture queues, connected recall/status flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 8 | Always-on lifecycle logging, debug error detail, argument formatting, and configured file output |
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
-| `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, tool-catalog caching, and error recovery |
-| `tests/turn-status.test.ts` | 2 | Status formatting, partial responses, and malformed-response degradation |
+| `tests/mcp-client.test.ts` | 6 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, and error recovery |
 
 Remaining integration gap: a full live OpenCode + real `memoir-mcp` protocol
 session (the process lifecycle itself is covered with a fixture server).
 
-Latest built-in coverage snapshot: 98.71% lines, 88.13% branches, 94.92%
+Latest built-in coverage snapshot: 97.61% lines, 86.51% branches, 88.46%
 functions. These are descriptive measurements, not mandatory CI thresholds.
 
 ## Build Pipeline
