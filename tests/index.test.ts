@@ -124,7 +124,7 @@ describe("MemoirOpenCode factory", () => {
     }
   });
 
-  it("queues repeated capture triggers for the same session", async () => {
+  it("snapshots repeated turns before serializing their dispatch", async () => {
     const previousMin = process.env.MEMOIR_CAPTURE_MIN_CHARS;
     process.env.MEMOIR_CAPTURE_MIN_CHARS = "0";
     const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
@@ -135,6 +135,7 @@ describe("MemoirOpenCode factory", () => {
       });
       let messageReads = 0;
       let prompts = 0;
+      const submitted: string[] = [];
       const client = {
         session: {
           messages: async () => {
@@ -151,8 +152,11 @@ describe("MemoirOpenCode factory", () => {
             };
           },
           create: async () => ({ data: { id: `throwaway-${prompts + 1}` } }),
-          promptAsync: async () => {
+          promptAsync: async (input: {
+            body: { parts: Array<{ type: string; text: string }> };
+          }) => {
             prompts++;
+            submitted.push(input.body.parts[0].text);
             if (prompts === 1) await firstAccepted;
           },
         },
@@ -165,6 +169,7 @@ describe("MemoirOpenCode factory", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       assert.strictEqual(prompts, 1);
+      assert.strictEqual(messageReads, 2);
       releaseFirst();
       while (prompts < 2) await new Promise((resolve) => setImmediate(resolve));
       await hooks.event({
@@ -176,6 +181,8 @@ describe("MemoirOpenCode factory", () => {
       await hooks.dispose();
       assert.strictEqual(prompts, 2);
       assert.strictEqual(messageReads, 2);
+      assert.match(submitted[0], /reply 1/);
+      assert.match(submitted[1], /reply 2/);
     } finally {
       connect.mock.restore();
       if (previousMin === undefined) delete process.env.MEMOIR_CAPTURE_MIN_CHARS;

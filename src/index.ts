@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Config, Plugin, PluginInput, PluginModule } from "@opencode-ai/plugin";
 import type { AgentConfig } from "@opencode-ai/sdk";
-import { captureTurn } from "./capture.js";
+import { dispatchCaptureSnapshot, prepareCaptureTurn } from "./capture.js";
 import { log, setProjectContext } from "./debug.js";
 import { callMemoirTool, MemoirRuntime } from "./mcp-client.js";
 import { deriveStorePath, safeRealpath } from "./path.js";
@@ -162,15 +162,31 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
   const dispatchCapture = (sid: string): void => {
     if (!sdkClient || disposing) return;
 
+    // Start transcript retrieval immediately so every chat.message snapshots
+    // its own completed turn even while an earlier dispatch is still pending.
+    const snapshot = prepareCaptureTurn(sdkClient, sid).catch((e: unknown) => {
+      log("capture snapshot failed", e);
+      return null;
+    });
     const previous = captureQueues.get(sid) ?? Promise.resolve();
     const current = previous
       .catch(() => undefined)
       .then(async () => {
+        const prepared = await snapshot;
+        if (!prepared) return;
+
         const client = await connectClient();
         if (client) {
           await branchMatcher.match(client, directory, drainCaptures);
         }
-        await captureTurn(sdkClient, sid, lastCaptured, agentModel, trackCapture);
+        await dispatchCaptureSnapshot(
+          sdkClient,
+          sid,
+          prepared,
+          lastCaptured,
+          agentModel,
+          trackCapture,
+        );
       })
       .catch((e: unknown) => {
         log("dispatchCapture failed", e);
