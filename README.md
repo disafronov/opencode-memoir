@@ -113,7 +113,17 @@ it can legitimately decide that there is nothing durable to store.
 make install     # install dependencies and Git hooks
 npm run build    # typecheck + emit dist
 npm test         # run the test suite
+make integration # optional live OpenCode + memoir-mcp protocol check
 ```
+
+The integration check requires `opencode` and `memoir-mcp` on PATH. It uses a
+temporary Git project, isolated OpenCode configuration/data, and a temporary
+Memoir store. A deterministic local OpenAI-compatible endpoint triggers a
+background error and verifies one retry, memory persistence, branch selection,
+subagent tool permissions, and temporary-session cleanup. OpenCode may download
+the configured `@ai-sdk/openai-compatible` provider package; no external model
+inference or provider credentials are required. Temporary services and files are
+removed after the check.
 
 ### Source layout
 
