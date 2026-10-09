@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { dispatchCaptureSnapshot } from "../src/capture.js";
 import {
   buildMemoirAgent,
   MEMOIR_CHECKOUT_TOOL,
@@ -113,6 +114,34 @@ describe("buildMemoirAgent", () => {
 });
 
 describe("runMemoirSubagent logging", () => {
+  it("rolls back resolved SDK errors and leaves the turn retryable", async () => {
+    useTempLog();
+    let fail = true;
+    let rollbacks = 0;
+    let prompts = 0;
+    const client = {
+      session: {
+        create: async () => ({ data: { id: "throwaway" } }),
+        promptAsync: async () => {
+          prompts++;
+          return fail ? { error: { message: "HTTP 400" } } : { data: undefined };
+        },
+      },
+    };
+    const seen = new Map<string, string>();
+    const snapshot = { turnId: "turn", transcript: "A durable fact" };
+    const dispatch = () =>
+      dispatchCaptureSnapshot(client, "parent", snapshot, seen, undefined, () => () => {
+        rollbacks++;
+      });
+    await assert.rejects(dispatch(), /HTTP 400/);
+    assert.strictEqual(rollbacks, 1);
+    assert.strictEqual(seen.has("parent"), false);
+    fail = false;
+    await dispatch();
+    assert.strictEqual(prompts, 2);
+    assert.strictEqual(seen.get("parent"), "turn");
+  });
   const failingClient = {
     session: {
       create: async () => ({ data: { id: "throwaway-1" } }),
