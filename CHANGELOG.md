@@ -1,3 +1,16 @@
+## [3.3.5](https://github.com/disafronov/opencode-memoir/compare/v3.3.4...v3.3.5) (2026-10-09)
+
+### Bug Fixes
+
+* initialize capture branch in an empty memoir store ([549590f](https://github.com/disafronov/opencode-memoir/commit/549590f700969b397cc195533215ba856157705d))
+* recheck retry branch after capture drain ([7efd273](https://github.com/disafronov/opencode-memoir/commit/7efd2738ac1ffa04c4cabfbe9bef6a8df2d330e5))
+* recover memoir runtime after server exit ([cf31815](https://github.com/disafronov/opencode-memoir/commit/cf318157f1a152bfab259a87d5def028970d99e0))
+* reject resolved capture submission errors ([fcda107](https://github.com/disafronov/opencode-memoir/commit/fcda107b2d36cde9a82e65395018bad278986d28))
+* require confirmed memoir branch before capture ([b0a5638](https://github.com/disafronov/opencode-memoir/commit/b0a5638f26ae0b6e1ebdad9959c6b60cfaa8879c))
+* serialize branch matching with capture submission ([40c88f2](https://github.com/disafronov/opencode-memoir/commit/40c88f2dd50ab118234fa6f8ca94fe8468208de2))
+* share memoir store across linked worktrees ([977fa1d](https://github.com/disafronov/opencode-memoir/commit/977fa1db43356bd6169b827c3fa4ff51f3ff8976))
+* track capture completion and retry background failures ([3e660e1](https://github.com/disafronov/opencode-memoir/commit/3e660e1da97960379d5a5a1a77ea412881b21dc5))
+
 ## [3.3.4](https://github.com/disafronov/opencode-memoir/compare/v3.3.3...v3.3.4) (2026-10-09)
 
 ## [3.3.3](https://github.com/disafronov/opencode-memoir/compare/v3.3.2...v3.3.3) (2026-08-05)
