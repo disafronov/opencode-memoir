@@ -5,7 +5,7 @@
  * once instead of being duplicated across callers.
  */
 export type MemoirStatus = {
-  branch?: string;
+  branch?: string | null;
   memory_count?: number;
 };
 
@@ -19,7 +19,8 @@ export function parseMemoirStatus(raw: string | null | undefined): MemoirStatus 
   try {
     const status = JSON.parse(raw) as MemoirStatus;
     return {
-      branch: typeof status.branch === "string" ? status.branch : undefined,
+      branch:
+        typeof status.branch === "string" || status.branch === null ? status.branch : undefined,
       memory_count: typeof status.memory_count === "number" ? status.memory_count : undefined,
     };
   } catch {

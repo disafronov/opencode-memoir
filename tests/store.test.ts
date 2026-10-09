@@ -108,6 +108,23 @@ describe("callMemoirTool", () => {
 });
 
 describe("MemoirBranchMatcher", () => {
+  it("creates the project branch in a valid empty store without treating missing status as empty", async () => {
+    const cwd = createGitRepo();
+    let branch: string | null = null;
+    const calls: string[] = [];
+    const client = {
+      callTool: async (input: { name: string; arguments?: { target?: string } }) => {
+        calls.push(input.name);
+        if (input.name === "memoir_checkout") branch = input.arguments?.target ?? null;
+        return { content: [{ type: "text", text: JSON.stringify({ branch }) }] };
+      },
+    };
+    assert.strictEqual(await new MemoirBranchMatcher().match(client as never, cwd), true);
+    assert.strictEqual(branch, "test-branch");
+    assert.ok(calls.includes("memoir_checkout"));
+    const unavailable = { callTool: async () => ({ content: [{ type: "text", text: "{}" }] }) };
+    assert.strictEqual(await new MemoirBranchMatcher().match(unavailable as never, cwd), false);
+  });
   it("no-ops when not in a git repo", async () => {
     let called = false;
     const client = {

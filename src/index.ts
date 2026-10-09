@@ -45,9 +45,12 @@ export class MemoirBranchMatcher {
     return next;
   }
 
-  private async currentBranch(client: Client): Promise<string> {
+  private async currentBranch(client: Client): Promise<string | null> {
     const raw = await callMemoirTool(client, "memoir_status");
-    return parseMemoirStatus(raw).branch ?? "";
+    const branch = parseMemoirStatus(raw).branch;
+    // A new store has a valid status with no HEAD yet. Missing/malformed
+    // status is different: checkout cannot be confirmed safely in that case.
+    return branch === null ? "" : (branch ?? null);
   }
 
   private async matchNow(
@@ -59,7 +62,7 @@ export class MemoirBranchMatcher {
     if (!codeBranch) return true;
 
     const storeBranch = await this.currentBranch(client);
-    if (!storeBranch) return false;
+    if (storeBranch === null) return false;
     if (storeBranch === codeBranch) return true;
     if (drain && !(await drain())) return false;
     // A capture or external client may have changed HEAD while we waited.
