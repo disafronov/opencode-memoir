@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, mock } from "node:test";
 
 import plugin, { currentGitBranch, MemoirBranchMatcher } from "../src/index.ts";
@@ -67,9 +71,15 @@ describe("MemoirOpenCode factory", () => {
   });
 
   it("does not dispatch a git capture when the MCP client is unavailable", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "memoir-index-git-"));
     const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
     let created = 0;
     try {
+      execFileSync("git", ["init", "--initial-branch=capture-test"], {
+        cwd: directory,
+        stdio: "ignore",
+      });
+      assert.strictEqual(await currentGitBranch(directory), "capture-test");
       const client = {
         session: {
           messages: async () => ({
@@ -91,12 +101,13 @@ describe("MemoirOpenCode factory", () => {
           promptAsync: async () => {},
         },
       };
-      const hooks = await plugin.server({ client, directory: process.cwd() } as never, {});
+      const hooks = await plugin.server({ client, directory } as never, {});
       await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
       await hooks.dispose();
       assert.strictEqual(created, 0);
     } finally {
       connect.mock.restore();
+      rmSync(directory, { recursive: true, force: true });
     }
   });
   it("returns hooks with name memoir", async () => {
