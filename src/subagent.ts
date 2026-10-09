@@ -130,10 +130,14 @@ export async function runMemoirSubagent(
     const rollback = onSessionCreated?.(throwawayID);
 
     try {
-      await sessionApi.promptAsync({
+      const result = await sessionApi.promptAsync({
         path: { id: throwawayID },
         body: { agent: MEMOIR_AGENT_NAME, parts: [{ type: "text", text: task }] },
       });
+      const error = (result as { error?: unknown } | null | undefined)?.error;
+      if (error !== undefined) {
+        throw new Error(`Capture submission failed: ${JSON.stringify(error)}`);
+      }
     } catch (e) {
       rollback?.();
       throw e;
