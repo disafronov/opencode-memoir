@@ -1,4 +1,4 @@
-.PHONY: help install lint lint-fix format typecheck test coverage audit build clean all
+.PHONY: help install lint lint-fix format typecheck test integration coverage audit build clean all
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -24,6 +24,9 @@ typecheck: ## Run TypeScript type checking
 
 test: ## Run tests
 	NODE_ENV=test npx tsx --test --import ./tests/setup.ts tests/*.test.ts
+
+integration: build ## Run live OpenCode + memoir-mcp protocol smoke test
+	node scripts/integration-smoke.mjs
 
 coverage: ## Run tests with a source coverage report
 	npm run test:coverage

@@ -12,6 +12,7 @@ make install           # npm dependencies + pre-commit/commit-msg/pre-push hooks
 npm run build          # tsc declarations + esbuild bundle to dist/
 npm run typecheck      # tsc --noEmit (strict mode)
 npm test              # tsx --test --import ./tests/setup.ts tests/*.test.ts (Node built-in test runner)
+make integration      # optional live OpenCode + memoir-mcp check with local deterministic model
 npm run test:coverage # optional built-in source coverage report
 
 # Linting & formatting
@@ -91,8 +92,13 @@ All optional:
 | `tests/prompts.test.ts` | 3 | `loadPrompt` — loads template verbatim with placeholders, caches (same reference), throws on missing |
 | `tests/mcp-client.test.ts` | 8 | Per-instance ownership, real child lifecycle, concurrent start/connect, reconnect, and error recovery |
 
-Remaining integration gap: a full live OpenCode + real `memoir-mcp` protocol
-session (the process lifecycle itself is covered with a fixture server).
+`make integration` runs a live OpenCode + real `memoir-mcp` protocol session
+with an isolated temporary Git project/store and a deterministic local model.
+It verifies initial branch creation, a real background error and one retry,
+memory persistence, tool permissions, and hidden-session cleanup. It requires
+both executables on PATH and may download the OpenCode provider package;
+it is optional and is not part of `make all` or CI. Real-model extraction quality
+is outside this deterministic protocol check.
 
 Latest built-in coverage snapshot: 97.61% lines, 86.51% branches, 88.46%
 functions. These are descriptive measurements, not mandatory CI thresholds.
