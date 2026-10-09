@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 
-import plugin from "../src/index.ts";
+import plugin, { currentGitBranch, MemoirBranchMatcher } from "../src/index.ts";
 import { MemoirRuntime } from "../src/mcp-client.ts";
+
+async function waitUntil(condition: () => boolean): Promise<void> {
+  const deadline = Date.now() + 2_000;
+  while (!condition()) {
+    assert.ok(Date.now() < deadline, "Timed out waiting for capture submission");
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 
 describe("plugin module shape", () => {
   it("exports default with id and server", () => {
@@ -14,6 +22,83 @@ describe("plugin module shape", () => {
 });
 
 describe("MemoirOpenCode factory", () => {
+  it("defers capture until the branch is confirmed without deduplicating the skipped turn", async () => {
+    let ready = false;
+    let prompts = 0;
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => ({}) as never);
+    const match = mock.method(MemoirBranchMatcher.prototype, "match", async () => ready);
+    try {
+      const client = {
+        session: {
+          messages: async () => ({
+            data: [
+              {
+                info: { id: "u1", role: "user" },
+                parts: [{ type: "text", text: "Remember this preference" }],
+              },
+              {
+                info: { id: "a1", role: "assistant" },
+                parts: [{ type: "text", text: "Acknowledged" }],
+              },
+            ],
+          }),
+          create: async () => ({ data: { id: "capture" } }),
+          promptAsync: async () => {
+            prompts++;
+            await hooks.event({
+              event: { type: "session.idle", properties: { sessionID: "capture" } },
+            });
+          },
+        },
+      };
+      const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
+      await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.strictEqual(match.mock.callCount(), 1);
+      assert.strictEqual(prompts, 0);
+      ready = true;
+      await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
+      await hooks.dispose();
+      assert.strictEqual(prompts, 1);
+    } finally {
+      match.mock.restore();
+      connect.mock.restore();
+    }
+  });
+
+  it("does not dispatch a git capture when the MCP client is unavailable", async () => {
+    const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
+    let created = 0;
+    try {
+      const client = {
+        session: {
+          messages: async () => ({
+            data: [
+              {
+                info: { id: "u1", role: "user" },
+                parts: [{ type: "text", text: "Remember this preference" }],
+              },
+              {
+                info: { id: "a1", role: "assistant" },
+                parts: [{ type: "text", text: "Acknowledged" }],
+              },
+            ],
+          }),
+          create: async () => {
+            created++;
+            return { data: { id: "capture" } };
+          },
+          promptAsync: async () => {},
+        },
+      };
+      const hooks = await plugin.server({ client, directory: process.cwd() } as never, {});
+      await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
+      await hooks.dispose();
+      assert.strictEqual(created, 0);
+    } finally {
+      connect.mock.restore();
+    }
+  });
   it("returns hooks with name memoir", async () => {
     const hooks = await plugin.server(undefined, {});
     assert.strictEqual(hooks.name, "memoir");
@@ -63,7 +148,7 @@ describe("MemoirOpenCode factory", () => {
         { sessionID: "parent" },
         { parts: [{ type: "text", text: "hello" }] },
       );
-      await new Promise((resolve) => setImmediate(resolve));
+      await waitUntil(() => prompts === 1);
       assert.strictEqual(prompts, 1);
       await hooks.event({
         event: { type: "session.idle", properties: { sessionID: "throwaway-1" } },
@@ -84,6 +169,7 @@ describe("MemoirOpenCode factory", () => {
     const connect = mock.method(MemoirRuntime.prototype, "connect", async () => null);
     try {
       let acceptPrompt!: () => void;
+      let submitted = false;
       const accepted = new Promise<void>((resolve) => {
         acceptPrompt = resolve;
       });
@@ -96,7 +182,10 @@ describe("MemoirOpenCode factory", () => {
             ],
           }),
           create: async () => ({ data: { id: "throwaway-1" } }),
-          promptAsync: () => accepted,
+          promptAsync: () => {
+            submitted = true;
+            return accepted;
+          },
         },
       };
       const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
@@ -110,6 +199,7 @@ describe("MemoirOpenCode factory", () => {
 
       await new Promise((resolve) => setImmediate(resolve));
       assert.strictEqual(finished, true);
+      await waitUntil(() => submitted);
       acceptPrompt();
       await hookRun;
       await new Promise((resolve) => setImmediate(resolve));
@@ -164,14 +254,14 @@ describe("MemoirOpenCode factory", () => {
       const hooks = await plugin.server({ client, directory: "/tmp" } as never, {});
 
       await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
-      await new Promise((resolve) => setImmediate(resolve));
+      await waitUntil(() => prompts === 1);
       await hooks["chat.message"]({ sessionID: "parent" }, { parts: [] });
       await new Promise((resolve) => setImmediate(resolve));
 
       assert.strictEqual(prompts, 1);
       assert.strictEqual(messageReads, 2);
       releaseFirst();
-      while (prompts < 2) await new Promise((resolve) => setImmediate(resolve));
+      await waitUntil(() => prompts === 2);
       await hooks.event({
         event: { type: "session.idle", properties: { sessionID: "throwaway-1" } },
       });
@@ -311,10 +401,11 @@ describe("MemoirOpenCode factory", () => {
     const previousAutoSave = process.env.MEMOIR_AUTO_SAVE;
     process.env.MEMOIR_AUTO_SAVE = "1";
     const calls: Array<{ name: string; arguments?: Record<string, unknown> }> = [];
+    const branch = await currentGitBranch();
     const mcpClient = {
       callTool: async (input: { name: string; arguments?: Record<string, unknown> }) => {
         calls.push(input);
-        return { content: [{ type: "text", text: "ok" }] };
+        return { content: [{ type: "text", text: JSON.stringify({ branch }) }] };
       },
     };
     const start = mock.method(
@@ -360,9 +451,7 @@ describe("MemoirOpenCode factory", () => {
         );
       }
 
-      while (capturePrompts.length === 0) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
+      await waitUntil(() => capturePrompts.length > 0);
       await hooks.event({
         event: { type: "session.idle", properties: { sessionID: "throwaway-capture" } },
       });

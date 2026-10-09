@@ -153,7 +153,13 @@ describe("MemoirBranchMatcher", () => {
       order.push("drain");
       return true;
     });
-    assert.deepEqual(order, ["memoir_status", "drain", "memoir_status", "memoir_checkout"]);
+    assert.deepEqual(order, [
+      "memoir_status",
+      "drain",
+      "memoir_status",
+      "memoir_checkout",
+      "memoir_status",
+    ]);
   });
 
   it("defers checkout when active captures do not drain", async () => {
@@ -165,7 +171,23 @@ describe("MemoirBranchMatcher", () => {
         return { content: [{ type: "text", text: JSON.stringify({ branch: "other" }) }] };
       },
     };
-    await new MemoirBranchMatcher().match(client as never, cwd, async () => false);
+    assert.strictEqual(
+      await new MemoirBranchMatcher().match(client as never, cwd, async () => false),
+      false,
+    );
     assert.deepEqual(calls, ["memoir_status"]);
+  });
+
+  it("does not confirm a failed checkout or unavailable status", async () => {
+    const cwd = createGitRepo();
+    for (const status of [null, "other"]) {
+      const client = {
+        callTool: async ({ name }: { name: string }) =>
+          name === "memoir_checkout" || status === null
+            ? { isError: true, content: [] }
+            : { content: [{ type: "text", text: JSON.stringify({ branch: status }) }] },
+      };
+      assert.strictEqual(await new MemoirBranchMatcher().match(client as never, cwd), false);
+    }
   });
 });
