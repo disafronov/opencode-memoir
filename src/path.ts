@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /** Resolve a path through symlinks, falling back to the input on failure. */
 export function safeRealpath(p: string): string {
@@ -42,6 +42,16 @@ export function deriveStorePath(cwd: string = process.cwd(), override?: string):
       timeout: 3_000,
     }).trim();
     projectDir = safeRealpath(gitRoot);
+    const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: realCwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3_000,
+    }).trim();
+    const sharedGitDir = safeRealpath(resolve(realCwd, commonDir));
+    // Preserve existing store names for ordinary repos and use the same root
+    // for linked worktrees. Separate/bare Git directories identify themselves.
+    projectDir = sharedGitDir.endsWith("/.git") ? dirname(sharedGitDir) : sharedGitDir;
   } catch {
     projectDir = resolve(realCwd);
   }

@@ -33,9 +33,29 @@ describe("deriveStorePath", () => {
   });
 
   it("uses git root when in a git repo", () => {
-    const result = deriveStorePath("/tmp");
-    assert.ok(result.startsWith("/"));
-    assert.ok(result.includes(".memoir"));
+    const cwd = createGitRepo();
+    assert.ok(deriveStorePath(cwd).endsWith(cwd.replace(/[/.]/g, "-")));
+  });
+
+  it("shares the main repository store with linked worktrees", () => {
+    const cwd = createGitRepo();
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "initial",
+      ],
+      { cwd, stdio: "ignore" },
+    );
+    const worktree = join(cwd, "linked-worktree");
+    execFileSync("git", ["worktree", "add", "-b", "linked", worktree], { cwd, stdio: "ignore" });
+    assert.strictEqual(deriveStorePath(worktree), deriveStorePath(cwd));
   });
 
   it("replaces slashes and dots with hyphens in slug", () => {
