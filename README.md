@@ -84,9 +84,12 @@ local model does not have to infer the catalog.
 
 On each real `chat.message`, the plugin immediately snapshots the previous
 completed turn: the incoming user message has not entered the transcript yet.
-Only dispatch is serialized per parent session, so a delayed earlier submission
-cannot make a later turn disappear from the queue. Branch matching remains
-serialized for the shared store. A hidden throwaway session is then created
+`CaptureCoordinator` serializes branch matching and capture submission together
+across parent sessions within each plugin instance. Snapshots are read immediately,
+so a delayed earlier submission cannot make a later turn disappear from the queue.
+An accepted capture is tracked before the next submission may switch branches;
+switching waits for active captures to finish. Captures on the same branch can
+continue running in parallel after submission. A hidden throwaway session is created
 without a `parentID` and submitted through `promptAsync`. The hook itself does
 not wait for that submission, and the subagent is instructed to store memories
 without emitting a response. Terminal session events remove completed

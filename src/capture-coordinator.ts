@@ -12,7 +12,7 @@ type CaptureCoordinatorOptions = {
 /** Owns capture queues and hidden-session lifecycle for one plugin instance. */
 export class CaptureCoordinator {
   private readonly lastCaptured = new Map<string, string>();
-  private readonly captureQueues = new Map<string, Promise<void>>();
+  private submissions: Promise<void> = Promise.resolve();
   private readonly activeCaptures = new Map<string, { done: Promise<void>; resolve: () => void }>();
   private disposing = false;
 
@@ -74,8 +74,10 @@ export class CaptureCoordinator {
       log("capture snapshot failed", e);
       return null;
     });
-    const previous = this.captureQueues.get(sid) ?? Promise.resolve();
-    const current = previous
+    // Hold the shared submission queue through branch confirmation, session
+    // registration, and prompt acceptance. Another parent cannot checkout
+    // between confirmation and registration of this capture.
+    this.submissions = this.submissions
       .catch(() => undefined)
       .then(async () => {
         const prepared = await snapshot;
@@ -103,18 +105,12 @@ export class CaptureCoordinator {
       .catch((e: unknown) => {
         log("dispatchCapture failed", e);
       });
-
-    this.captureQueues.set(sid, current);
-    void current.then(() => {
-      if (this.captureQueues.get(sid) === current) this.captureQueues.delete(sid);
-    });
   };
 
   async close(): Promise<void> {
     this.disposing = true;
-    await Promise.all([...this.captureQueues.values()]);
+    await this.submissions;
     await this.drain();
-    this.captureQueues.clear();
     this.lastCaptured.clear();
   }
 }
