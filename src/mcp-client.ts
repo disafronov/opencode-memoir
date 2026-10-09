@@ -47,10 +47,14 @@ async function pickFreeHighPort(tries = 20): Promise<number> {
   throw new Error("memoir: could not find a free high port for the HTTP server");
 }
 
-function waitForPort(port: number, timeoutMs = 10_000): Promise<void> {
+function waitForPort(port: number, proc: ChildProcess, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const attempt = () => {
+      if (proc.exitCode !== null || proc.signalCode !== null) {
+        reject(new Error("memoir: HTTP server exited before becoming ready"));
+        return;
+      }
       const sock = createConnection({ port, host: "127.0.0.1" });
       sock.once("connect", () => {
         sock.destroy();
@@ -80,6 +84,7 @@ export class MemoirRuntime {
   private serverProc: ChildProcess | null = null;
   private serverUrl: URL | null = null;
   private serverPort: number | null = null;
+  private publishedPort: number | null = null;
   private startingServer: Promise<URL> | null = null;
 
   constructor(
@@ -144,21 +149,31 @@ export class MemoirRuntime {
         });
 
         this.serverProc = proc;
+        proc.once("exit", () => {
+          if (this.serverProc !== proc) return;
+          log("memoir-mcp exited, resetting runtime state");
+          this.serverProc = null;
+          this.serverUrl = null;
+          const client = this.state?.client;
+          this.cleanupClient();
+          if (client) void client.close().catch((e) => log("exited MCP client close failed", e));
+        });
 
         try {
-          await waitForPort(port);
+          await waitForPort(port, proc);
         } catch {
           // Port may be taken — kill the child and retry.
           proc.kill();
           await exited;
           this.serverProc = null;
           this.serverUrl = null;
-          this.serverPort = null;
+          this.serverPort = this.publishedPort;
           this.cleanupClient();
           continue;
         }
 
         this.serverUrl = url;
+        this.publishedPort = port;
         log("memoir-mcp HTTP server up at", url.toString());
         return url;
       }
@@ -170,12 +185,13 @@ export class MemoirRuntime {
     try {
       return await start;
     } catch (e) {
-      this.startingServer = null;
       this.serverUrl = null;
       if (this.serverProc) this.serverProc.kill();
       this.serverProc = null;
-      this.serverPort = null;
+      this.serverPort = this.publishedPort;
       throw e;
+    } finally {
+      if (this.startingServer === start) this.startingServer = null;
     }
   }
 
@@ -192,6 +208,7 @@ export class MemoirRuntime {
         };
 
         transport.onclose = () => {
+          if (this.state?.client !== client) return;
           log("mcp-client: transport closed, resetting state");
           this.cleanupClient();
         };
@@ -226,7 +243,7 @@ export class MemoirRuntime {
       this.serverProc = null;
       try {
         await new Promise<void>((resolve) => {
-          if (proc.exitCode !== null) {
+          if (proc.exitCode !== null || proc.signalCode !== null) {
             resolve();
             return;
           }
