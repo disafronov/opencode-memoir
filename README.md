@@ -94,7 +94,11 @@ without a `parentID` and submitted through `promptAsync`. The hook itself does
 not wait for that submission, and the subagent is instructed to store memories
 without emitting a response. Terminal session events remove completed
 throwaway sessions. During shutdown, `dispose` waits for queued submissions and
-active capture sessions before closing the owned MCP process.
+active capture sessions before closing the owned MCP process. Capture state distinguishes
+prompt acceptance from terminal completion. A background `session.error` triggers
+one retry of the original snapshot on the same project branch. Further errors,
+a branch change, or shutdown stop retries. Completion means the subagent finished;
+it can legitimately decide that there is nothing durable to store.
 
 ## Development
 

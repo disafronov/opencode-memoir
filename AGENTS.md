@@ -63,7 +63,7 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 - **`event`** — Completes and deletes known hidden capture sessions on terminal idle/error events
 - **`dispose`** — Stops accepting new captures, drains queued submissions and active captures, closes the instance MCP process, and clears pending state
 
-Runtime hook failures are contained and logged. Transcript retrieval starts at each real `chat.message`, producing an immutable `{ turnId, transcript }` snapshot before instance-wide submission serialization. `CaptureCoordinator` holds the submission queue through branch matching, hidden-session registration, and prompt acceptance. Branch switching drains active captures; accepted captures on the same branch can run in parallel. Capture creates a hidden throwaway session without a `parentID`, submits OpenCode's supported `promptAsync` input, and never blocks the active hook. Terminal events release waiters and delete completed throwaway sessions. `dispose` waits for active capture completion with a bounded timeout before closing `memoir-mcp`. By contract the subagent never emits any response — the correct outcome is the absence of any reply.
+Runtime hook failures are contained and logged. Transcript retrieval starts at each real `chat.message`, producing an immutable `{ turnId, transcript }` snapshot before instance-wide submission serialization. `CaptureCoordinator` holds the submission queue through branch matching, hidden-session registration, and prompt acceptance. Branch switching drains active captures; accepted captures on the same branch can run in parallel. Queued, submitting, accepted, completed, and failed states distinguish submission from completion. A background error retries the immutable snapshot once, only while the project branch is unchanged and shutdown has not begun. Terminal dedup history is bounded to 256 turns and contains no transcripts. Capture creates a hidden throwaway session without a `parentID`, submits OpenCode's supported `promptAsync` input, and never blocks the active hook. Terminal events release waiters and delete completed throwaway sessions. `dispose` waits for active capture completion with a bounded timeout before closing `memoir-mcp`. By contract the subagent never emits any response — the correct outcome is the absence of any reply.
 
 ## Environment Variables
 
@@ -78,13 +78,13 @@ All optional:
 
 ## Tests
 
-8 test files, 81 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log`).
+8 test files, 86 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log`).
 
 | File | Tests | What it covers |
 | ------ | ------: | ---------------- |
 | `tests/store.test.ts` | 15 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
 | `tests/subagent.test.ts` | 11 | Model fallback isolation, dynamic Memoir-namespace permissions, and debug-only submission error details |
-| `tests/capture-coordinator.test.ts` | 4 | Cross-parent branch ownership, concurrent active captures, submission recovery, and shutdown |
+| `tests/capture-coordinator.test.ts` | 9 | Cross-parent branch ownership, early terminal events, bounded background retries, out-of-order completion, concurrent active captures, and shutdown |
 | `tests/capture.test.ts` | 13 | Transcript extraction, filtering, malformed APIs, dispatch, and dedup |
 | `tests/index.test.ts` | 19 | Module shape, hook behavior, immediate turn snapshots, non-blocking capture queues, connected recall/status flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 8 | Always-on lifecycle logging, debug error detail, argument formatting, and configured file output |

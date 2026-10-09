@@ -33,6 +33,157 @@ const options = {
 };
 
 describe("CaptureCoordinator", () => {
+  it("retries an early background error with the immutable snapshot and stops after two attempts", {
+    timeout: 2_000,
+  }, async () => {
+    const retried = deferred();
+    let reads = 0;
+    let created = 0;
+    const transcripts: string[] = [];
+    const deleted: string[] = [];
+    const coordinator = new CaptureCoordinator(
+      {
+        session: {
+          messages: async () => {
+            reads++;
+            return messages("original");
+          },
+          create: async () => ({ data: { id: `capture-${++created}` } }),
+          promptAsync: async ({
+            path,
+            body,
+          }: {
+            path: { id: string };
+            body: { parts: Array<{ text: string }> };
+          }) => {
+            transcripts.push(body.parts[0].text);
+            coordinator.finish(path.id, "failed");
+            coordinator.finish(path.id, "completed");
+            if (transcripts.length === 2) retried.resolve();
+          },
+          delete: async ({ path }: { path: { id: string } }) => {
+            deleted.push(path.id);
+          },
+        },
+      },
+      options,
+    );
+    coordinator.enqueue("parent");
+    await retried.promise;
+    coordinator.enqueue("parent");
+    await coordinator.close();
+    assert.strictEqual(created, 2);
+    assert.strictEqual(reads, 2);
+    assert.strictEqual(transcripts[0], transcripts[1]);
+    assert.deepEqual(deleted, ["capture-1", "capture-2"]);
+  });
+
+  it("deduplicates a completed early idle event after acceptance", { timeout: 2_000 }, async () => {
+    const earlyIdle = deferred();
+    const accepted = deferred();
+    let created = 0;
+    const coordinator = new CaptureCoordinator(
+      {
+        session: {
+          messages: async () => messages("parent"),
+          create: async () => ({ data: { id: `capture-${++created}` } }),
+          promptAsync: async ({ path }: { path: { id: string } }) => {
+            coordinator.finish(path.id);
+            earlyIdle.resolve();
+            await accepted.promise;
+          },
+        },
+      },
+      options,
+    );
+    coordinator.enqueue("parent");
+    await earlyIdle.promise;
+    assert.strictEqual(await coordinator.drain(1), false);
+    coordinator.enqueue("parent");
+    accepted.resolve();
+    await coordinator.close();
+    assert.strictEqual(created, 1);
+  });
+
+  it("deduplicates out-of-order completion of two turns in the same parent", {
+    timeout: 2_000,
+  }, async () => {
+    const both = deferred();
+    let turn = "first";
+    let created = 0;
+    let submitted = 0;
+    const coordinator = new CaptureCoordinator(
+      {
+        session: {
+          messages: async () => messages(turn),
+          create: async () => ({ data: { id: `capture-${++created}` } }),
+          promptAsync: async () => {
+            if (++submitted === 2) both.resolve();
+          },
+        },
+      },
+      options,
+    );
+    coordinator.enqueue("parent");
+    turn = "second";
+    coordinator.enqueue("parent");
+    await both.promise;
+    coordinator.finish("capture-2");
+    coordinator.finish("capture-1");
+    coordinator.enqueue("parent");
+    await coordinator.close();
+    assert.strictEqual(created, 2);
+  });
+
+  it("does not retry a background error into a different project branch", {
+    timeout: 2_000,
+  }, async () => {
+    const submitted = deferred();
+    let branch = "first";
+    let created = 0;
+    const coordinator = new CaptureCoordinator(
+      {
+        session: {
+          messages: async () => messages("parent"),
+          create: async () => ({ data: { id: `capture-${++created}` } }),
+          promptAsync: async () => {
+            submitted.resolve();
+          },
+        },
+      },
+      { ...options, currentBranch: async () => branch },
+    );
+    coordinator.enqueue("parent");
+    await submitted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    branch = "second";
+    coordinator.finish("capture-1", "failed");
+    await coordinator.close();
+    assert.strictEqual(created, 1);
+  });
+
+  it("does not launch a retry after shutdown begins", { timeout: 2_000 }, async () => {
+    const submitted = deferred();
+    let created = 0;
+    const coordinator = new CaptureCoordinator(
+      {
+        session: {
+          messages: async () => messages("parent"),
+          create: async () => ({ data: { id: `capture-${++created}` } }),
+          promptAsync: async () => {
+            submitted.resolve();
+          },
+        },
+      },
+      options,
+    );
+    coordinator.enqueue("parent");
+    await submitted.promise;
+    const closing = coordinator.close();
+    coordinator.finish("capture-1", "failed");
+    await closing;
+    assert.strictEqual(created, 1);
+  });
   it("holds branch ownership until registration and drains the first parent before switching", {
     timeout: 2_000,
   }, async () => {
