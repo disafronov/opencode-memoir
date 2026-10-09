@@ -112,7 +112,8 @@ npm test         # run the test suite
 
 | File | Responsibility |
 | --- | --- |
-| `src/index.ts` | Plugin entry: async branch matching, MCP registration, capture queues, hooks, and dispose |
+| `src/index.ts` | Plugin entry: async branch matching, MCP registration, hooks, and dispose |
+| `src/capture-coordinator.ts` | Capture queues, deduplication state, hidden-session tracking, and shutdown |
 | `src/mcp-client.ts` | Project-scoped MCP process/client lifecycle and tool calls |
 | `src/capture.ts` | Transcript extraction, filtering, task construction, and capture dispatch |
 | `src/subagent.ts` | Subagent permissions, model selection, and OpenCode task dispatch |

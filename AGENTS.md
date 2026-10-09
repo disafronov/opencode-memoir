@@ -45,7 +45,8 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 | File | Lines | Role |
 | ------ | ------: | ------ |
-| `src/index.ts` | ~240 | Plugin entry: async `currentGitBranch` + `MemoirBranchMatcher` (exported for tests), subagent + MCP registration, per-session capture queues, hooks, dispose |
+| `src/index.ts` | ~240 | Plugin entry: async `currentGitBranch` + `MemoirBranchMatcher` (exported for tests), subagent + MCP registration, hooks, dispose |
+| `src/capture-coordinator.ts` | ~130 | Capture queues, deduplication state, hidden-session tracking, and shutdown |
 | `src/mcp-client.ts` | ~283 | Instance-owned HTTP `memoir-mcp` process + internal `Client` + `callMemoirTool`; reconnectable lifecycle |
 | `src/subagent.ts` | ~140 | Hidden `memoir` subagent restricted to the dynamic `memoir_*` namespace except store-global checkout + throwaway-session `promptAsync` runner + model fallback resolution |
 | `src/capture.ts` | ~200 | Per-turn capture orchestration: transcript extraction, min-chars pre-filter, hidden-session dispatch, and dedup |
