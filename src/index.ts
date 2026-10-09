@@ -213,7 +213,7 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
       const event = input.event;
       const sessionID = event?.properties?.sessionID;
       if (sessionID && (event.type === "session.idle" || event.type === "session.error")) {
-        captures.finish(sessionID);
+        captures.finish(sessionID, event.type === "session.error" ? "failed" : "completed");
       }
     },
 

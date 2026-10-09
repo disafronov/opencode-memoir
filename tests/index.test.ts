@@ -266,7 +266,7 @@ describe("MemoirOpenCode factory", () => {
         event: { type: "session.idle", properties: { sessionID: "throwaway-1" } },
       });
       await hooks.event({
-        event: { type: "session.error", properties: { sessionID: "throwaway-2" } },
+        event: { type: "session.idle", properties: { sessionID: "throwaway-2" } },
       });
       await hooks.dispose();
       assert.strictEqual(prompts, 2);
