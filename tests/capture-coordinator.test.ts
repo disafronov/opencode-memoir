@@ -33,6 +33,40 @@ const options = {
 };
 
 describe("CaptureCoordinator", () => {
+  it("cancels a retry when the branch changes while matching waits", {
+    timeout: 2_000,
+  }, async () => {
+    const submitted = deferred();
+    let branch = "first";
+    let matches = 0;
+    let created = 0;
+    const coordinator = new CaptureCoordinator(
+      {
+        session: {
+          messages: async () => messages("parent"),
+          create: async () => ({ data: { id: `capture-${++created}` } }),
+          promptAsync: async () => {
+            submitted.resolve();
+          },
+        },
+      },
+      {
+        ...options,
+        currentBranch: async () => branch,
+        matchBranch: async () => {
+          if (++matches === 2) branch = "second";
+          return true;
+        },
+      },
+    );
+    coordinator.enqueue("parent");
+    await submitted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    coordinator.finish("capture-1", "failed");
+    await coordinator.close();
+    assert.strictEqual(matches, 2);
+    assert.strictEqual(created, 1);
+  });
   it("retries an early background error with the immutable snapshot and stops after two attempts", {
     timeout: 2_000,
   }, async () => {

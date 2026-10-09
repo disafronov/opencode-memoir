@@ -79,13 +79,13 @@ All optional:
 
 ## Tests
 
-8 test files, 87 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log`).
+8 test files, 88 tests total — Node built-in test runner via `tsx --test`. `tests/setup.ts` is auto-loaded via `--import` and redirects `MEMOIR_LOG` to a per-run temp file so tests never write to the real plugin log (`$XDG_DATA_HOME/opencode/log/memoir/YYYY-MM-DD.log`).
 
 | File | Tests | What it covers |
 | ------ | ------: | ---------------- |
 | `tests/store.test.ts` | 16 | Path derivation, current branch, MCP tool errors, and serialized branch matching |
 | `tests/subagent.test.ts` | 11 | Model fallback isolation, dynamic Memoir-namespace permissions, and debug-only submission error details |
-| `tests/capture-coordinator.test.ts` | 9 | Cross-parent branch ownership, early terminal events, bounded background retries, out-of-order completion, concurrent active captures, and shutdown |
+| `tests/capture-coordinator.test.ts` | 10 | Cross-parent branch ownership, early terminal events, bounded background retries, out-of-order completion, concurrent active captures, and shutdown |
 | `tests/capture.test.ts` | 13 | Transcript extraction, filtering, malformed APIs, dispatch, and dedup |
 | `tests/index.test.ts` | 19 | Module shape, hook behavior, immediate turn snapshots, non-blocking capture queues, connected recall/status flow, self-trigger filtering, and graceful degradation |
 | `tests/debug.test.ts` | 8 | Always-on lifecycle logging, debug error detail, argument formatting, and configured file output |

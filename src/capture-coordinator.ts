@@ -140,7 +140,15 @@ export class CaptureCoordinator {
         log("capture deferred: memoir client unavailable", task.parent);
         return;
       }
-      task.branch ??= await this.options.currentBranch();
+      const branch = await this.options.currentBranch();
+      // Matching can wait for active captures; recheck the project after that
+      // wait so an old retry cannot be submitted on a newly selected branch.
+      if (task.attempts > 0 && branch !== task.branch) {
+        this.remember(task, "failed");
+        log("capture retry cancelled: project branch changed during matching", task.parent);
+        return;
+      }
+      task.branch ??= branch;
       task.state = "submitting";
       task.attempts++;
       const id = await runMemoirSubagent(
