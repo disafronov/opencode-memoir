@@ -36,9 +36,12 @@ export async function currentGitBranch(cwd = process.cwd()): Promise<string> {
 export class MemoirBranchMatcher {
   private matching: Promise<void> = Promise.resolve();
 
-  match(client: Client, cwd: string, drain?: () => Promise<boolean>): Promise<void> {
+  match(client: Client, cwd: string, drain?: () => Promise<boolean>): Promise<boolean> {
     const next = this.matching.then(() => this.matchNow(client, cwd, drain));
-    this.matching = next.catch(() => undefined);
+    this.matching = next.then(
+      () => undefined,
+      () => undefined,
+    );
     return next;
   }
 
@@ -51,14 +54,16 @@ export class MemoirBranchMatcher {
     client: Client,
     cwd: string,
     drain?: () => Promise<boolean>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const codeBranch = await currentGitBranch(cwd);
-    if (!codeBranch) return;
+    if (!codeBranch) return true;
 
-    if ((await this.currentBranch(client)) === codeBranch) return;
-    if (drain && !(await drain())) return;
+    const storeBranch = await this.currentBranch(client);
+    if (!storeBranch) return false;
+    if (storeBranch === codeBranch) return true;
+    if (drain && !(await drain())) return false;
     // A capture or external client may have changed HEAD while we waited.
-    if ((await this.currentBranch(client)) === codeBranch) return;
+    if ((await this.currentBranch(client)) === codeBranch) return true;
 
     // memoir_checkout (per the v0.2.4 contract) switches to a branch, creating
     // it on demand when `create` is true. A single call replaces the old
@@ -67,6 +72,7 @@ export class MemoirBranchMatcher {
       target: codeBranch,
       create: true,
     });
+    return (await this.currentBranch(client)) === codeBranch;
   }
 
   clear(): void {
@@ -177,7 +183,13 @@ const MemoirOpenCode: Plugin = async (input, rawOptions) => {
 
         const client = await connectClient();
         if (client) {
-          await branchMatcher.match(client, directory, drainCaptures);
+          if (!(await branchMatcher.match(client, directory, drainCaptures))) {
+            log("capture deferred: memoir branch could not be confirmed", sid);
+            return;
+          }
+        } else if (await currentGitBranch(directory)) {
+          log("capture deferred: memoir client unavailable", sid);
+          return;
         }
         await dispatchCaptureSnapshot(
           sdkClient,
