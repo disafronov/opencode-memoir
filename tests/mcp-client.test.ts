@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import type { ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -7,6 +9,41 @@ import { MemoirRuntime } from "../src/mcp-client.ts";
 const fixture = fileURLToPath(new URL("fixtures/fake-mcp.mjs", import.meta.url));
 
 describe("MemoirRuntime", () => {
+  it("restarts a crashed server on the registered URL and reconnects its client", async () => {
+    let connections = 0;
+    const runtime = new MemoirRuntime([process.execPath, fixture], undefined, undefined, {
+      createClientConnection: () => {
+        connections++;
+        return {
+          client: { connect: async () => {}, close: async () => {} },
+          transport: {},
+        } as never;
+      },
+    });
+    try {
+      const originalUrl = await runtime.start();
+      const firstClient = await runtime.connect();
+      const child = (runtime as unknown as { serverProc: ChildProcess }).serverProc;
+      const exited = once(child, "exit");
+      child.kill("SIGKILL");
+      await exited;
+      assert.strictEqual((await runtime.start()).toString(), originalUrl.toString());
+      assert.notStrictEqual(await runtime.connect(), firstClient);
+      assert.strictEqual(connections, 2);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("closes cleanly after a server is killed by a signal", async () => {
+    const runtime = new MemoirRuntime([process.execPath, fixture]);
+    await runtime.start();
+    const child = (runtime as unknown as { serverProc: ChildProcess }).serverProc;
+    const exited = once(child, "exit");
+    child.kill("SIGKILL");
+    await exited;
+    await runtime.close();
+  });
   it("owns server state per plugin instance", async () => {
     const first = new MemoirRuntime([process.execPath, fixture]);
     const second = new MemoirRuntime([process.execPath, fixture]);
