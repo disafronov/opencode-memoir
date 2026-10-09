@@ -1,4 +1,4 @@
-.PHONY: help install lint lint-fix format typecheck test coverage build clean all
+.PHONY: help install lint lint-fix format typecheck test coverage audit build clean all
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -27,6 +27,10 @@ test: ## Run tests
 
 coverage: ## Run tests with a source coverage report
 	npm run test:coverage
+
+audit: ## Check dependencies for known vulnerabilities
+	@echo "Auditing dependencies..."
+	npm audit --audit-level=high
 
 build: ## Build the plugin (typecheck + bundle)
 	npm run build
