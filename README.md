@@ -38,7 +38,9 @@ does not block the `chat.message` hook.
 
 ## Store configuration
 
-The plugin delegates store path resolution to `memoir-mcp`. Override via `MEMOIR_STORE` env var or `store` plugin option:
+The plugin derives a store path under `~/.memoir/` from the project repository.
+Linked Git worktrees of the same repository share that store by default.
+Override via `MEMOIR_STORE` env var or `store` plugin option:
 
 ```jsonc
 {
@@ -47,6 +49,14 @@ The plugin delegates store path resolution to `memoir-mcp`. Override via `MEMOIR
   ]
 }
 ```
+
+Run only one active OpenCode instance per Memoir store. Concurrent instances
+sharing a store are unsupported, including instances in different Git worktrees:
+one instance can switch the store's branch while another is still capturing,
+causing memories to be saved on the wrong branch. Finish one instance before
+starting another, or configure a separate store for each concurrent instance.
+Separate stores have independent memory and history. This restriction also
+applies to multiple project instances hosted by a single OpenCode server.
 
 ## Environment variables
 
@@ -88,7 +98,7 @@ completed turn: the incoming user message has not entered the transcript yet.
 across parent sessions within each plugin instance. Snapshots are read immediately,
 so a delayed earlier submission cannot make a later turn disappear from the queue.
 An accepted capture is tracked before the next submission may switch branches;
-switching waits for active captures to finish. Captures on the same branch can
+switching waits for active captures to finish. Within that instance, captures on the same branch can
 continue running in parallel after submission. A hidden throwaway session is created
 without a `parentID` and submitted through `promptAsync`. The hook itself does
 not wait for that submission, and the subagent is instructed to store memories

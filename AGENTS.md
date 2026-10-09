@@ -44,6 +44,11 @@ Each plugin/project instance owns one `memoir-mcp` HTTP server (spawned directly
 
 ### Source Layout
 
+Only one active plugin/project instance per Memoir store is supported. Linked
+Git worktrees share a store by default; concurrent instances must use separate
+stores, with independent memory and history. Capture coordination is local to
+one instance and does not protect against another process switching store HEAD.
+
 | File | Lines | Role |
 | ------ | ------: | ------ |
 | `src/index.ts` | ~240 | Plugin entry: async `currentGitBranch` + `MemoirBranchMatcher` (exported for tests), subagent + MCP registration, hooks, dispose |
