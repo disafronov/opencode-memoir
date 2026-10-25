@@ -1,3 +1,9 @@
+## [3.3.6](https://github.com/disafronov/opencode-memoir/compare/v3.3.5...v3.3.6) (2026-10-25)
+
+### Bug Fixes
+
+* cover github-actions dependencies with Dependabot ([f757da7](https://github.com/disafronov/opencode-memoir/commit/f757da7ec81b95586ba432ac38e922c5137f8806))
+
 ## [3.3.5](https://github.com/disafronov/opencode-memoir/compare/v3.3.4...v3.3.5) (2026-10-09)
 
 ### Bug Fixes
