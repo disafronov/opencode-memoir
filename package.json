@@ -1,7 +1,7 @@
 {
   "name": "opencode-memoir",
   "version": "3.3.7",
-  "description": "Memoir memory plugin for OpenCode — Git-versioned, taxonomy-structured AI memory.",
+  "description": "OpenCode integration for Memoir with project-scoped MCP and automatic conversation capture.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
