@@ -1,9 +1,9 @@
 # opencode-memoir
 
-OpenCode plugin for [Memoir](https://github.com/zhangfengcdt/memoir): git-versioned, taxonomy-structured memory for coding agents.
-
-Launches the globally installed `memoir-mcp` console script and registers it as
-a project-scoped remote MCP server.
+OpenCode integration for [Memoir](https://github.com/zhangfengcdt/memoir).
+The plugin launches the installed `memoir-mcp` console script as a project-scoped
+remote MCP server and automatically captures completed conversations into
+Memoir's Git-versioned memory.
 
 ## Install
 
