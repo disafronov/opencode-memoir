@@ -24,7 +24,7 @@ npm run format         # biome format --write src/ tests/
 npx tsx --test --import ./tests/setup.ts tests/index.test.ts
 
 # Full verification (what CI runs)
-# lint_and_test.yaml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
+# lint_and_test.yml: biome ci src/ tests/ → npm run typecheck → npm run build → npm test
 
 # Equivalent via Makefile
 make all                # lint → typecheck → test → build
@@ -119,12 +119,12 @@ The build first removes `dist/`, then runs two stages:
 
 ## CI/CD
 
-- **PRs**: `lint_and_test.yaml` — `biome ci` → `typecheck` → `build` → `test` (Node 24/26 matrix)
-- **PRs + schedule**: `audit.yaml` — `npm audit --audit-level=high` (Node 20/22)
-- **Push to main (non-release commits)**: `semantic.yaml` release job — runs semantic-release via Docker (`ghcr.io/disafronov/semantic-release:latest`), updates CHANGELOG, tags `vx.y.z`
-- **Push to release**: `semantic.yaml` release job + sync back to main (ff or rebase)
-- **Push to main (release commits)**: `semantic.yaml` rebase job — rebases all non-draft non-deps PRs onto main
-- **Version tags (`v*`)**: `publish-npm.yaml` — `npm publish --provenance --access public`
+- **PRs**: `lint_and_test.yml` — `biome ci` → `typecheck` → `build` → `test` (Node 24/26 matrix)
+- **PRs + schedule**: `audit.yml` — `npm audit --audit-level=high` (Node 20/22)
+- **Push to main (non-release commits)**: `semantic.yml` release job — runs semantic-release via Docker (`ghcr.io/disafronov/semantic-release:latest`), updates CHANGELOG, tags `vx.y.z`
+- **Push to release**: `semantic.yml` release job + sync back to main (ff or rebase)
+- **Push to main (release commits)**: `semantic.yml` rebase job — rebases all non-draft non-deps PRs onto main
+- **Version tags (`v*`)**: `publish-npm.yml` — `npm publish --provenance --access public`
 
 ## Conventional Commits
 
