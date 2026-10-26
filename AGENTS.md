@@ -121,10 +121,10 @@ The build first removes `dist/`, then runs two stages:
 
 - **PRs**: `lint_and_test.yml` — `biome ci` → `typecheck` → `build` → `test` (Node 24/26 matrix)
 - **PRs + schedule**: `audit.yml` — `npm audit --audit-level=high` (Node 20/22)
-- **Push to main (non-release commits)**: `semantic.yml` release job — runs semantic-release via Docker (`ghcr.io/disafronov/semantic-release:latest`), updates CHANGELOG, tags `vx.y.z`
-- **Push to release**: `semantic.yml` release job + sync back to main (ff or rebase)
+- **Push to main (non-release commits)**: `semantic.yml` release job — runs semantic-release via Docker (`ghcr.io/disafronov/semantic-release:latest`), updates CHANGELOG/package versions, tags stable `vx.y.z` (main-only policy; no RC cycle)
+- **Shared workflow**: supports `release` for other projects; this repository intentionally uses only `main` and does not need a `release` branch.
 - **Push to main (release commits)**: `semantic.yml` rebase job — rebases all non-draft non-deps PRs onto main
-- **Version tags (`v*`)**: `publish-npm.yml` — `npm publish --provenance --access public`
+- **Stable version tags (`vx.y.z`)**: `publish-npm.yml` — `npm publish --provenance --access public`
 
 ## Conventional Commits
 
