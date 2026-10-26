@@ -1,3 +1,9 @@
+## [3.3.8](https://github.com/disafronov/opencode-memoir/compare/v3.3.7...v3.3.8) (2026-10-26)
+
+### Bug Fixes
+
+* align semantic-release policy and committer sign-off ([0c06684](https://github.com/disafronov/opencode-memoir/commit/0c0668442ed94cf4ffcb9c2d1ef122eb261a4df6))
+
 ## [3.3.7](https://github.com/disafronov/opencode-memoir/compare/v3.3.6...v3.3.7) (2026-10-25)
 
 ## [3.3.6](https://github.com/disafronov/opencode-memoir/compare/v3.3.5...v3.3.6) (2026-10-25)

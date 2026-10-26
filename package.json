@@ -1,6 +1,6 @@
 {
   "name": "opencode-memoir",
-  "version": "3.3.7",
+  "version": "3.3.8",
   "description": "OpenCode integration for Memoir with project-scoped MCP and automatic conversation capture.",
   "type": "module",
   "main": "dist/index.js",
