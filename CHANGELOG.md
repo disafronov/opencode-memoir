@@ -1,3 +1,9 @@
+## [3.3.10](https://github.com/disafronov/opencode-memoir/compare/v3.3.9...v3.3.10) (2026-11-03)
+
+### Bug Fixes
+
+* **ci:** target rc instead of legacy release branch ([2c4e487](https://github.com/disafronov/opencode-memoir/commit/2c4e487454032372e1a379773078c267fb5d966e))
+
 ## [3.3.9](https://github.com/disafronov/opencode-memoir/compare/v3.3.8...v3.3.9) (2026-11-02)
 
 ### Code Refactoring
