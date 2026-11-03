@@ -4,7 +4,7 @@ name: Lint and test
   pull_request:
     branches:
       - main
-      - release
+      - rc
 
 jobs:
   lint:
