@@ -31,4 +31,4 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit
