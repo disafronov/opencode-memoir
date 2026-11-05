@@ -1,3 +1,9 @@
+## [3.3.11](https://github.com/disafronov/opencode-memoir/compare/v3.3.10...v3.3.11) (2026-11-05)
+
+### Code Refactoring
+
+* deps ([45ce242](https://github.com/disafronov/opencode-memoir/commit/45ce242336b3f32ab774ab7194b8a128f05cd4ef))
+
 ## [3.3.10](https://github.com/disafronov/opencode-memoir/compare/v3.3.9...v3.3.10) (2026-11-03)
 
 ### Bug Fixes
