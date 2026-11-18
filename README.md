@@ -157,4 +157,4 @@ Releases are fully automated — no manual `npm version` or `npm publish`.
 2. On push to `main`, `.github/workflows/semantic.yml` runs [semantic-release](https://semantic-release.gitbook.io/)
 3. The new tag triggers `.github/workflows/publish-npm.yml`, which builds and runs `npm publish --provenance`
 
-<!-- refactor: deps -->
+<!-- refactor: deps 2 -->
